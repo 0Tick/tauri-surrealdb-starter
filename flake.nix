@@ -7,7 +7,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # fenix – Rust toolchain provider (replaces rust-overlay).
-    # Supports fromRustupToolchainFile AND Android cross-compilation std libs.
+    # Supports fromToolchainFile and Android cross-compilation std libs.
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -36,9 +36,17 @@
         # ── Rust toolchains ─────────────────────────────────────────────────
         fenixPkgs = fenix.packages.${system};
 
-        # Host-only toolchain that follows rust-toolchain.toml.
-        # Used by crane for reproducible desktop builds.
-        rustToolchainHost = fenixPkgs.fromRustupToolchainFile ./rust-toolchain.toml;
+        # Host-only toolchain for the stable channel declared in
+        # rust-toolchain.toml. We compose explicit components from fenix's
+        # pinned stable artifacts to keep evaluation fully pure.
+        rustToolchainHost = fenixPkgs.combine [
+          fenixPkgs.stable.cargo
+          fenixPkgs.stable.clippy
+          fenixPkgs.stable.rust-src
+          fenixPkgs.stable.rustc
+          fenixPkgs.stable.rustfmt
+          fenixPkgs.stable.rust-analyzer
+        ];
 
         # Full dev-shell toolchain: host components + Android cross-std libs.
         # The extra Android targets are ignored by crane but let  cargo build
@@ -304,7 +312,6 @@
             echo "  cargo clippy             lint Rust code"
             echo "  nix flake check          run all Nix checks (build + clippy + fmt)"
             echo ""
-            exec fish
           '';
         };
       }
