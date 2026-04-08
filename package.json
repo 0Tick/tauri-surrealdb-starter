@@ -1,0 +1,19 @@
+{
+  "name": "tauri-surrealdb-starter",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build:packages": "pnpm --filter @tauri-surrealdb-starter/transport build",
+    "dev": "pnpm build:packages && pnpm --filter tauri-todo dev",
+    "build": "pnpm build:packages && pnpm --filter tauri-todo build",
+    "tauri:dev": "pnpm build:packages && pnpm --filter tauri-todo tauri dev",
+    "tauri:build": "pnpm build:packages && pnpm --filter tauri-todo tauri build",
+    "type-check": "pnpm --recursive --parallel type-check"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

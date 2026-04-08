@@ -1,0 +1,30 @@
+{
+  "name": "@tauri-surrealdb-starter/transport",
+  "version": "0.1.0",
+  "description": "Tauri IPC transport for SurrealDB – forwards JSON-RPC calls to the embedded Rust backend via a single `rpc` Tauri command.",
+  "keywords": ["tauri", "surrealdb", "transport", "ipc"],
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "dev": "tsc --project tsconfig.json --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  }
+}

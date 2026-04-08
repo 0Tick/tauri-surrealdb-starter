@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schemas.tauri.app/v2/schema.json",
+  "identifier": "default",
+  "description": "Default capabilities – enables core IPC and window operations.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

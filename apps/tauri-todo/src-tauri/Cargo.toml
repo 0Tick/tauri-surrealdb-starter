@@ -1,0 +1,25 @@
+[package]
+name = "tauri-todo"
+version = "0.1.0"
+description = "Tauri v2 todo app with embedded SurrealDB"
+edition = "2021"
+rust-version = "1.77"
+
+# Tauri requires a lib target for mobile
+[lib]
+name = "tauri_todo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+surrealdb = { version = "2", features = ["kv-surrealkv"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+
+[profile.release]
+opt-level = "s"   # optimize for binary size on mobile
+strip = true

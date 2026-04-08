@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tauri Todo — SurrealDB</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>📝 Tauri Todo</h1>
+        <p class="subtitle">Powered by embedded <strong>SurrealDB</strong> via Tauri IPC</p>
+      </header>
+
+      <main>
+        <!-- Add todo form -->
+        <form id="add-form" autocomplete="off">
+          <input
+            id="todo-input"
+            type="text"
+            placeholder="What needs to be done?"
+            aria-label="New todo"
+            required
+          />
+          <button type="submit">Add</button>
+        </form>
+
+        <!-- Status / loading indicator -->
+        <p id="status" class="status"></p>
+
+        <!-- Todo list -->
+        <ul id="todo-list" class="todo-list" aria-label="Todo list"></ul>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

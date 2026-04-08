@@ -1,0 +1,26 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+.turbo/
+
+# Rust / Cargo build artifacts
+# Cargo.lock is committed for the application (apps/tauri-todo/src-tauri)
+# to ensure reproducible builds.
+target/
+
+# Tauri
+**/src-tauri/gen/
+**/src-tauri/target/
+
+# Env
+.env
+.env.local
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
