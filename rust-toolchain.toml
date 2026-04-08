@@ -1,0 +1,6 @@
+[toolchain]
+channel = "stable"
+# Minimum version required by Cargo.toml's rust-version = "1.77"
+# Keeping this on stable means you always get the latest stable release.
+# Pin to a specific version (e.g. "1.80.0") if you need exact reproducibility.
+components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]

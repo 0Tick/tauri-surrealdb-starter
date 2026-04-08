@@ -159,8 +159,9 @@ form.addEventListener("submit", async (e) => {
 async function init(): Promise<void> {
   setStatus("Connecting to database…");
   try {
-    // Explicitly set ns/db (the Rust backend defaults to ns=default db=todos,
-    // but calling use() here makes the session explicit and demonstrates usage)
+    // Explicitly set ns/db to demonstrate the use() call.
+    // The Rust backend pre-selects ns=default db=todos at startup, so
+    // this call is not strictly required but shows how to switch databases.
     await db.use("default", "todos");
     await loadTodos();
   } catch (err) {

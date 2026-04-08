@@ -20,6 +20,11 @@ target/
 .env
 .env.local
 
+# Nix
+result
+result-*
+.direnv/
+
 # Editor
 .vscode/settings.json
 .idea/

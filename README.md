@@ -58,6 +58,64 @@ pnpm tauri:build
 
 ---
 
+## Nix (alternative setup)
+
+A `flake.nix` is provided for reproducible development and building using the
+[Nix package manager](https://nixos.org/).
+
+### Prerequisites
+
+- [Nix](https://nixos.org/download) with flakes enabled:
+  ```bash
+  # Add to /etc/nix/nix.conf or ~/.config/nix/nix.conf
+  experimental-features = nix-command flakes
+  ```
+- Optional: [direnv](https://direnv.net/) + [nix-direnv](https://github.com/nix-community/nix-direnv) for automatic shell activation.
+
+### Development shell
+
+```bash
+# Enter the dev shell (provides Rust, Node, pnpm, and all system libs)
+nix develop
+
+# Or automatically when you cd into the repo (requires nix-direnv):
+direnv allow
+```
+
+Inside the shell, use the same pnpm commands as above:
+
+```bash
+pnpm install
+pnpm tauri:dev
+pnpm tauri:build
+```
+
+### Building with Nix
+
+Before the first `nix build`, you must obtain the hash for the pnpm offline
+cache (a one-time step; repeat whenever `pnpm-lock.yaml` changes):
+
+```bash
+# 1. Attempt a build – it will fail and print the correct hash.
+nix build .#pnpmOfflineCache 2>&1 | grep 'got:'
+
+# 2. Open flake.nix and replace the value of  pnpmHash  with the hash above.
+
+# 3. Build the desktop binary:
+nix build
+
+# The binary is symlinked at ./result/bin/tauri-todo
+```
+
+### Nix checks (CI)
+
+```bash
+# Runs: binary build + cargo clippy + cargo fmt check
+nix flake check
+```
+
+---
+
 ## How the RPC bridge works
 
 ```
