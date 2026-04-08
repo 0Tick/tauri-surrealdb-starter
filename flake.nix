@@ -6,9 +6,10 @@
     # Use unstable for the freshest packages; pin to a tag for reproducibility.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Provides a Rust toolchain that respects rust-toolchain.toml.
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
+    # fenix – Rust toolchain provider (replaces rust-overlay).
+    # Supports fromRustupToolchainFile AND Android cross-compilation std libs.
+    fenix = {
+      url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -21,20 +22,49 @@
   };
 
   # ── Outputs ─────────────────────────────────────────────────────────────────
-  outputs = { self, nixpkgs, rust-overlay, crane, flake-utils }:
+  outputs = { self, nixpkgs, fenix, crane, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          # android_sdk.accept_license and allowUnfree are required for the
+          # Android SDK / NDK and tools such as android-studio.
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
         };
 
-        # ── Rust toolchain ──────────────────────────────────────────────────
-        # Read the channel / components from rust-toolchain.toml so both Nix
-        # and rustup users get the same version.
-        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        # ── Rust toolchains ─────────────────────────────────────────────────
+        fenixPkgs = fenix.packages.${system};
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+        # Host-only toolchain that follows rust-toolchain.toml.
+        # Used by crane for reproducible desktop builds.
+        rustToolchainHost = fenixPkgs.fromRustupToolchainFile ./rust-toolchain.toml;
+
+        # Full dev-shell toolchain: host components + Android cross-std libs.
+        # The extra Android targets are ignored by crane but let  cargo build
+        # --target aarch64-linux-android  work inside the dev shell.
+        rustToolchainFull = fenixPkgs.combine [
+          rustToolchainHost
+          fenixPkgs.targets.aarch64-linux-android.latest.rust-std
+          fenixPkgs.targets.armv7-linux-androideabi.latest.rust-std
+          fenixPkgs.targets.i686-linux-android.latest.rust-std
+          fenixPkgs.targets.x86_64-linux-android.latest.rust-std
+        ];
+
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchainHost;
+
+        # ── Android SDK / NDK ────────────────────────────────────────────────
+        androidSdk = (pkgs.androidenv.composeAndroidPackages {
+          platformVersions = [ "36" ];
+          ndkVersions = [ "26.3.11579264" ];
+          includeNDK = true;
+          useGoogleAPIs = false;
+          useGoogleTVAddOns = false;
+          includeEmulator = false;
+          includeSystemImages = false;
+          includeSources = true;
+          buildToolsVersions = [ "35.0.0" ];
+        }).androidsdk;
 
         # ── Tauri system dependencies ───────────────────────────────────────
         # These are the C libraries required to compile and run the Tauri
@@ -54,6 +84,7 @@
             gdk-pixbuf
             pango
             cairo
+            dbus
             # System-tray support (optional; remove if you don't use it)
             libayatana-appindicator
           ]
@@ -222,32 +253,61 @@
         #   direnv allow           →  auto-enter via .envrc (requires nix-direnv)
         #
         # Inside the shell you can use all standard commands:
-        #   pnpm install && pnpm tauri:dev
+        #   pnpm install && pnpm tauri:dev       (desktop)
+        #   pnpm tauri android init              (first-time Android setup)
+        #   pnpm tauri android dev               (Android emulator / device)
         devShells.default = pkgs.mkShell {
           packages = [
-            # Rust toolchain (rustc, cargo, rust-analyzer, clippy, rustfmt)
-            rustToolchain
+            # Rust toolchain with Android cross-compilation std libs
+            rustToolchainFull
             # JavaScript toolchain
             pkgs.nodejs
             pkgs.pnpm
+            pkgs.bun
+            pkgs.typescript-language-server
+            # Android toolchain
+            androidSdk
+            pkgs.jdk
+            pkgs.android-studio
             # Handy Cargo extras
             pkgs.cargo-edit   # cargo add / cargo upgrade
             pkgs.cargo-watch  # cargo watch -x check
+            # Miscellaneous dev tools
+            pkgs.claude-code
+            pkgs.curl
+            pkgs.wget
           ] ++ tauriLibs ++ tauriNativeBuildInputs;
+
+          # Expose Tauri's GTK/WebKit libs to the dynamic linker (Linux only).
+          LD_LIBRARY_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux
+            "${pkgs.lib.makeLibraryPath tauriLibs}:$LD_LIBRARY_PATH";
+
+          # Required for GTK apps to find icon themes and GSettings schemas.
+          XDG_DATA_DIRS = pkgs.lib.optionalString pkgs.stdenv.isLinux
+            "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS";
+
+          # Android SDK / NDK locations consumed by Tauri and Gradle.
+          ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
+          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/26.3.11579264";
+          GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
 
           shellHook = ''
             echo ""
             echo "🦀  Tauri SurrealDB Starter – Nix dev shell"
             echo "────────────────────────────────────────────"
-            echo "  pnpm install        install / sync JS dependencies"
-            echo "  pnpm tauri:dev      start Vite dev server + Tauri window"
-            echo "  pnpm tauri:build    build production app bundle"
-            echo "  cargo check         quick Rust type-check (from src-tauri/)"
-            echo "  cargo clippy        lint Rust code"
-            echo "  nix flake check     run all Nix checks (build + clippy + fmt)"
+            echo "  pnpm install             install / sync JS dependencies"
+            echo "  pnpm tauri:dev           start Vite dev server + Tauri window"
+            echo "  pnpm tauri:build         build production desktop app bundle"
+            echo "  pnpm tauri android init  initialise the Android project (once)"
+            echo "  pnpm tauri android dev   run on Android device / emulator"
+            echo "  cargo check              quick Rust type-check (from src-tauri/)"
+            echo "  cargo clippy             lint Rust code"
+            echo "  nix flake check          run all Nix checks (build + clippy + fmt)"
             echo ""
+            exec fish
           '';
         };
       }
     );
 }
+
