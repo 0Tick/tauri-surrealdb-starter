@@ -2,6 +2,12 @@
 
 Small starter monorepo for a Tauri app that runs **embedded SurrealDB** on the Rust side and talks to it from the frontend via Tauri RPC.
 
+## Disclaimer
+
+⚠️ This repository was the result of many failed attempts of trying to get this to work by vibecoding. I don't know rust much and thus had to resort to vibecoding to get something working. 
+⚠️ I will not be able to provide support or assistance but am open to suggestions or PRs to this repo.
+
+
 ## What is included
 
 - `apps/desktop-mobile`: Tauri app (desktop + Android-first flow)
@@ -45,8 +51,10 @@ npm run android:dev
 - Embedded engine uses `surrealkv` persisted under the app data directory.
 - `signin` currently acknowledges credentials but does not enforce auth yet.
 - API coverage is intentionally minimal.
+- LIVE Querys are unavailable due to the complexity to get them running in this embedded way with mobile support too. I don't know enough about the SurrealDB codebase and rust to know how I could even approach this
+- No IOS support yet as setting up tooling for that is jot something I have looked into
 
 ## Next steps
 
 - Add typed response helpers and richer error mapping.
-- Expand SDK compatibility toward upstream `surrealdb.js` parity.
+- Add IOS support if possible
