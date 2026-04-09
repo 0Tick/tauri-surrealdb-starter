@@ -1,0 +1,24 @@
+{
+    "name": "@starter/app",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit && vite build",
+        "preview": "vite preview",
+        "typecheck": "tsc --noEmit",
+        "tauri:dev": "tauri dev",
+        "tauri:build": "tauri build",
+        "android:dev": "tauri android dev",
+        "tauri": "tauri"
+    },
+    "dependencies": {
+        "@starter/surrealdb-js-tauri": "file:../../packages/surrealdb-js-tauri"
+    },
+    "devDependencies": {
+        "@tauri-apps/cli": "^2.1.0",
+        "typescript": "^5.6.3",
+        "vite": "^5.4.8"
+    }
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tauri SurrealDB Starter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Tauri + SurrealKV Todo</h1>
+      <p class="subtitle">Embedded SurrealDB with local persistence</p>
+
+      <form id="todo-form">
+        <input
+          id="todo-input"
+          type="text"
+          placeholder="What needs to be done?"
+          autocomplete="off"
+        />
+        <button type="submit">Add</button>
+      </form>
+
+      <div class="toolbar">
+        <button id="refresh" type="button">Refresh</button>
+        <span id="status">Connecting...</span>
+      </div>
+
+      <ul id="todo-list"></ul>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

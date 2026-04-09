@@ -1,0 +1,17 @@
+{
+    "name": "tauri-surrealdb-starter",
+    "private": true,
+    "version": "0.1.0",
+    "workspaces": [
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "dev": "npm run dev --workspace @starter/app",
+        "tauri:dev": "npm run tauri:dev --workspace @starter/app",
+        "tauri": "npm run tauri --workspace @starter/app",
+        "android:dev": "npm run android:dev --workspace @starter/app",
+        "build": "npm run build --workspace @starter/app",
+        "typecheck": "npm run typecheck --workspaces"
+    }
+}
