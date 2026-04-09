@@ -7,32 +7,19 @@ body {
 }
 
 main {
-    max-width: 720px;
+    max-width: 1100px;
     margin: 24px auto;
     padding: 20px;
+    padding-bottom: 54vh;
 }
 
 h1 {
     margin: 0;
+    font-size: 1.5rem;
 }
 
 .subtitle {
     opacity: 0.8;
-}
-
-#todo-form {
-    display: flex;
-    gap: 10px;
-    margin: 16px 0;
-}
-
-#todo-input {
-    flex: 1;
-    border: 1px solid #2f3c70;
-    border-radius: 10px;
-    background: #101734;
-    color: #e6e8f2;
-    padding: 12px;
 }
 
 button {
@@ -42,53 +29,106 @@ button {
     color: white;
     padding: 10px 14px;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin: 12px 0;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 #status[data-state="error"] {
     color: #ff6b6b;
 }
 
-#todo-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.todo-item {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: center;
-    border-radius: 12px;
-    background: #121933;
-    padding: 12px;
-}
-
-.todo-item label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-}
-
-.todo-item.done span {
-    text-decoration: line-through;
-    opacity: 0.7;
-}
-
-.empty {
+.panel {
     border-radius: 12px;
     background: #121933;
     padding: 14px;
-    opacity: 0.8;
+    margin-top: 14px;
+}
+
+.output-panel {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 20;
+    height: 26vh;
+    min-height: 10vh;
+    max-height: 50vh;
+    resize: vertical;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.panel h2 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+}
+
+.row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+input,
+textarea {
+    border: 1px solid #2f3c70;
+    border-radius: 10px;
+    background: #101734;
+    color: #e6e8f2;
+    padding: 10px;
+    min-width: 140px;
+    flex: 1;
+}
+
+textarea {
+    width: 100%;
+    min-height: 74px;
+    margin-bottom: 8px;
+    resize: vertical;
+}
+
+label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#output {
+    margin: 0;
+    border-radius: 10px;
+    background: #0b1020;
+    padding: 14px;
+    overflow: auto;
+    max-height: none;
+    flex: 1;
+}
+
+#live-id {
+    opacity: 0.9;
+    word-break: break-all;
+}
+
+@media (max-width: 700px) {
+
+    input,
+    textarea,
+    button {
+        width: 100%;
+    }
+
+    .output-panel {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+    }
 }

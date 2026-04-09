@@ -7,25 +7,119 @@
   </head>
   <body>
     <main>
-      <h1>Tauri + SurrealKV Todo</h1>
-      <p class="subtitle">Embedded SurrealDB with local persistence</p>
+      <h1>SurrealDB + Custom SDK Feature Showcase</h1>
+      <p class="subtitle">
+        Validate embedded SurrealKV behavior across SDK methods
+      </p>
 
-      <form id="todo-form">
-        <input
-          id="todo-input"
-          type="text"
-          placeholder="What needs to be done?"
-          autocomplete="off"
-        />
-        <button type="submit">Add</button>
-      </form>
+      <section class="panel">
+        <h2>Connection & Session</h2>
+        <div class="row">
+          <input id="namespace" value="app" placeholder="namespace" />
+          <input id="database" value="app" placeholder="database" />
+          <button id="connect" type="button">connect()</button>
+          <button id="use" type="button">use()</button>
+          <button id="health" type="button">health()</button>
+          <button id="version" type="button">version()</button>
+          <button id="info" type="button">info()</button>
+          <button id="db-meta" type="button">db()</button>
+          <button id="invalidate" type="button">invalidate()</button>
+          <button id="close" type="button">close()</button>
+        </div>
+      </section>
 
-      <div class="toolbar">
-        <button id="refresh" type="button">Refresh</button>
-        <span id="status">Connecting...</span>
-      </div>
+      <section class="panel">
+        <h2>Auth</h2>
+        <div class="row">
+          <input
+            id="signin-json"
+            value='{"username":"demo","password":"demo"}'
+          />
+          <button id="signin" type="button">signin()</button>
+          <button id="signup" type="button">signup()</button>
+        </div>
+        <div class="row">
+          <input id="auth-token" placeholder="token for authenticate()" />
+          <button id="authenticate" type="button">authenticate()</button>
+        </div>
+      </section>
 
-      <ul id="todo-list"></ul>
+      <section class="panel">
+        <h2>Variables & Functions</h2>
+        <div class="row">
+          <input id="let-name" value="demoVar" placeholder="let name" />
+          <input
+            id="let-value"
+            value='{"hello":"world"}'
+            placeholder="let value (json)"
+          />
+          <button id="let" type="button">let()</button>
+          <button id="unset" type="button">unset()</button>
+        </div>
+        <div class="row">
+          <input
+            id="run-name"
+            value="string::length"
+            placeholder="function name"
+          />
+          <input
+            id="run-args"
+            value='["surreal"]'
+            placeholder="args (json array)"
+          />
+          <button id="run" type="button">run()</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Raw Query</h2>
+        <textarea id="query-sql">
+SELECT * FROM showcase ORDER BY createdAt DESC;</textarea
+        >
+        <textarea id="query-vars">{}</textarea>
+        <div class="row">
+          <button id="query" type="button">query()</button>
+          <button id="seed" type="button">seed showcase table</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>CRUD & Relate</h2>
+        <div class="row">
+          <input id="resource" value="showcase" placeholder="table or record" />
+          <input id="record-id" value="demo-1" placeholder="record id suffix" />
+          <input
+            id="payload"
+            value='{"name":"sample","active":true}'
+            placeholder="payload json"
+          />
+        </div>
+        <div class="row">
+          <button id="select" type="button">select()</button>
+          <button id="create" type="button">create()</button>
+          <button id="insert" type="button">insert()</button>
+          <button id="update" type="button">update()</button>
+          <button id="upsert" type="button">upsert()</button>
+          <button id="merge" type="button">merge()</button>
+          <button id="patch" type="button">patch()</button>
+          <button id="delete" type="button">delete()</button>
+        </div>
+        <div class="row">
+          <input id="from" value="user:demo" placeholder="from" />
+          <input id="relation" value="likes" placeholder="relation" />
+          <input id="to" value="showcase:demo-1" placeholder="to" />
+          <button id="relate" type="button">relate()</button>
+        </div>
+      </section>
+
+      <section class="panel output-panel" id="output-panel">
+        <div class="toolbar">
+          <strong>Status:</strong>
+          <span id="status">idle</span>
+          <button id="clear-log" type="button">clear log</button>
+        </div>
+        <pre id="output"></pre>
+      </section>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -1,303 +1,358 @@
-import { Surreal } from "@starter/surrealdb-js-tauri";
+import { Surreal, type PatchOperation } from "@starter/surrealdb-js-tauri";
 import "./style.css";
 
-type WrappedThing = { tb: string; id: string };
-
-type TodoRow = {
-  id: string | WrappedThing;
-  text: string;
-  completed: boolean;
-  createdAt?: string;
-};
-
-const form = document.querySelector<HTMLFormElement>("#todo-form");
-const input = document.querySelector<HTMLInputElement>("#todo-input");
-const list = document.querySelector<HTMLUListElement>("#todo-list");
-const refreshButton = document.querySelector<HTMLButtonElement>("#refresh");
 const status = document.querySelector<HTMLSpanElement>("#status");
+const output = document.querySelector<HTMLPreElement>("#output");
+const namespaceInput = document.querySelector<HTMLInputElement>("#namespace");
+const databaseInput = document.querySelector<HTMLInputElement>("#database");
+const signinJsonInput =
+  document.querySelector<HTMLInputElement>("#signin-json");
+const authTokenInput = document.querySelector<HTMLInputElement>("#auth-token");
+const letNameInput = document.querySelector<HTMLInputElement>("#let-name");
+const letValueInput = document.querySelector<HTMLInputElement>("#let-value");
+const runNameInput = document.querySelector<HTMLInputElement>("#run-name");
+const runArgsInput = document.querySelector<HTMLInputElement>("#run-args");
+const querySqlInput = document.querySelector<HTMLTextAreaElement>("#query-sql");
+const queryVarsInput =
+  document.querySelector<HTMLTextAreaElement>("#query-vars");
+const resourceInput = document.querySelector<HTMLInputElement>("#resource");
+const recordIdInput = document.querySelector<HTMLInputElement>("#record-id");
+const payloadInput = document.querySelector<HTMLInputElement>("#payload");
+const fromInput = document.querySelector<HTMLInputElement>("#from");
+const relationInput = document.querySelector<HTMLInputElement>("#relation");
+const toInput = document.querySelector<HTMLInputElement>("#to");
 
-if (!form || !input || !list || !refreshButton || !status) {
-  throw new Error("UI elements are missing");
+const connectButton = document.querySelector<HTMLButtonElement>("#connect");
+const useButton = document.querySelector<HTMLButtonElement>("#use");
+const healthButton = document.querySelector<HTMLButtonElement>("#health");
+const versionButton = document.querySelector<HTMLButtonElement>("#version");
+const infoButton = document.querySelector<HTMLButtonElement>("#info");
+const dbMetaButton = document.querySelector<HTMLButtonElement>("#db-meta");
+const invalidateButton =
+  document.querySelector<HTMLButtonElement>("#invalidate");
+const closeButton = document.querySelector<HTMLButtonElement>("#close");
+const signinButton = document.querySelector<HTMLButtonElement>("#signin");
+const signupButton = document.querySelector<HTMLButtonElement>("#signup");
+const authenticateButton =
+  document.querySelector<HTMLButtonElement>("#authenticate");
+const letButton = document.querySelector<HTMLButtonElement>("#let");
+const unsetButton = document.querySelector<HTMLButtonElement>("#unset");
+const runButton = document.querySelector<HTMLButtonElement>("#run");
+const queryButton = document.querySelector<HTMLButtonElement>("#query");
+const seedButton = document.querySelector<HTMLButtonElement>("#seed");
+const selectButton = document.querySelector<HTMLButtonElement>("#select");
+const createButton = document.querySelector<HTMLButtonElement>("#create");
+const insertButton = document.querySelector<HTMLButtonElement>("#insert");
+const updateButton = document.querySelector<HTMLButtonElement>("#update");
+const upsertButton = document.querySelector<HTMLButtonElement>("#upsert");
+const mergeButton = document.querySelector<HTMLButtonElement>("#merge");
+const patchButton = document.querySelector<HTMLButtonElement>("#patch");
+const deleteButton = document.querySelector<HTMLButtonElement>("#delete");
+const relateButton = document.querySelector<HTMLButtonElement>("#relate");
+const clearLogButton = document.querySelector<HTMLButtonElement>("#clear-log");
+
+if (
+  !status ||
+  !output ||
+  !namespaceInput ||
+  !databaseInput ||
+  !signinJsonInput ||
+  !authTokenInput ||
+  !letNameInput ||
+  !letValueInput ||
+  !runNameInput ||
+  !runArgsInput ||
+  !querySqlInput ||
+  !queryVarsInput ||
+  !resourceInput ||
+  !recordIdInput ||
+  !payloadInput ||
+  !fromInput ||
+  !relationInput ||
+  !toInput ||
+  !connectButton ||
+  !useButton ||
+  !healthButton ||
+  !versionButton ||
+  !infoButton ||
+  !dbMetaButton ||
+  !invalidateButton ||
+  !closeButton ||
+  !signinButton ||
+  !signupButton ||
+  !authenticateButton ||
+  !letButton ||
+  !unsetButton ||
+  !runButton ||
+  !queryButton ||
+  !seedButton ||
+  !selectButton ||
+  !createButton ||
+  !insertButton ||
+  !updateButton ||
+  !upsertButton ||
+  !mergeButton ||
+  !patchButton ||
+  !deleteButton ||
+  !relateButton ||
+  !clearLogButton
+) {
+  throw new Error("Showcase UI elements are missing");
 }
 
 const db = new Surreal();
-
-const recordIdToString = (id: TodoRow["id"]): string => {
-  if (typeof id === "string") {
-    return id;
-  }
-
-  return `${id.tb}:${id.id}`;
-};
-
-const shortId = (rid: string): string => rid.replace(/^todo:/, "");
 
 const setStatus = (message: string, isError = false) => {
   status.textContent = message;
   status.dataset.state = isError ? "error" : "ok";
 };
 
-const escapeHtml = (value: string): string =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+const log = (label: string, payload?: unknown) => {
+  const timestamp = new Date().toISOString();
+  const entry =
+    payload === undefined
+      ? `[${timestamp}] ${label}`
+      : `[${timestamp}] ${label}\n${JSON.stringify(payload, null, 2)}`;
+  output.textContent = output.textContent
+    ? `${entry}\n\n${output.textContent}`
+    : entry;
+};
 
-const unwrapSurrealValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map(unwrapSurrealValue);
+const parseJson = <T = unknown>(value: string, fallback: T): T => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return fallback;
   }
 
-  if (!value || typeof value !== "object") {
-    return value;
+  return JSON.parse(trimmed) as T;
+};
+
+const recordRef = (): string => {
+  const resource = resourceInput.value.trim();
+  const recordId = recordIdInput.value.trim();
+  if (!resource) {
+    throw new Error("Resource is required");
   }
 
-  const entries = Object.entries(value as Record<string, unknown>);
-  if (entries.length === 1) {
-    const [key, inner] = entries[0];
-
-    if (key === "Array" && Array.isArray(inner)) {
-      return inner.map(unwrapSurrealValue);
-    }
-
-    if (key === "Object" && inner && typeof inner === "object") {
-      return Object.fromEntries(
-        Object.entries(inner as Record<string, unknown>).map(
-          ([nestedKey, nestedValue]) => [
-            nestedKey,
-            unwrapSurrealValue(nestedValue),
-          ],
-        ),
-      );
-    }
-
-    if (["Strand", "String", "Datetime", "Uuid", "Duration"].includes(key)) {
-      return typeof inner === "string" ? inner : String(inner);
-    }
-
-    if (key === "Bool") {
-      return Boolean(inner);
-    }
-
-    if (key === "Thing" && inner && typeof inner === "object") {
-      const thing = inner as Record<string, unknown>;
-      return {
-        tb: typeof thing.tb === "string" ? thing.tb : String(thing.tb ?? ""),
-        id: String(unwrapSurrealValue(thing.id) ?? ""),
-      };
-    }
-
-    if (key === "Number" && inner && typeof inner === "object") {
-      const numberObject = inner as Record<string, unknown>;
-      if ("Int" in numberObject) {
-        return Number(numberObject.Int);
-      }
-      if ("Float" in numberObject) {
-        return Number(numberObject.Float);
-      }
-      if ("Decimal" in numberObject) {
-        return Number(numberObject.Decimal);
-      }
-    }
-
-    if (key === "Null" || key === "None") {
-      return null;
-    }
+  if (resource.includes(":")) {
+    return resource;
   }
 
-  return Object.fromEntries(
-    entries.map(([nestedKey, nestedValue]) => [
-      nestedKey,
-      unwrapSurrealValue(nestedValue),
-    ]),
-  );
+  return recordId ? `${resource}:${recordId}` : resource;
 };
 
-const normalizeTodoRows = (raw: unknown): TodoRow[] => {
-  const normalized = unwrapSurrealValue(raw);
-  const rows = Array.isArray(normalized) ? normalized : [];
-
-  return rows
-    .map((row): TodoRow | null => {
-      if (!row || typeof row !== "object") {
-        return null;
-      }
-
-      const record = row as Record<string, unknown>;
-      const idValue = record.id;
-      let id: string | WrappedThing;
-
-      if (typeof idValue === "string") {
-        id = idValue;
-      } else if (
-        idValue &&
-        typeof idValue === "object" &&
-        typeof (idValue as Record<string, unknown>).tb === "string"
-      ) {
-        const thing = idValue as Record<string, unknown>;
-        id = {
-          tb: String(thing.tb),
-          id: String(thing.id ?? ""),
-        };
-      } else {
-        return null;
-      }
-
-      return {
-        id,
-        text:
-          typeof record.text === "string"
-            ? record.text
-            : String(record.text ?? ""),
-        completed: Boolean(record.completed),
-        createdAt:
-          typeof record.createdAt === "string" ? record.createdAt : undefined,
-      };
-    })
-    .filter((row): row is TodoRow => row !== null);
-};
-
-const renderTodos = (rows: TodoRow[]) => {
-  if (rows.length === 0) {
-    list.innerHTML = `<li class="empty">No todos yet.</li>`;
-    return;
-  }
-  list.innerHTML = rows
-    .sort((a, b) =>
-      a.createdAt && b.createdAt ? b.createdAt.localeCompare(a.createdAt) : 0,
-    )
-    .map((row) => {
-      const rid = recordIdToString(row.id);
-      const dataId = escapeHtml(rid);
-      const checked = row.completed ? "checked" : "";
-      const doneClass = row.completed ? "done" : "";
-      return `<li class="todo-item ${doneClass}" data-id="${dataId}">
-        <label>
-          <input type="checkbox" data-action="toggle" ${checked} />
-          <span>${escapeHtml(row.text)}</span>
-        </label>
-        <button type="button" data-action="delete">Delete</button>
-      </li>`;
-    })
-    .join("");
-};
-
-const listTodos = async () => {
-  const rawRows = await db.query<unknown>(
-    "SELECT * FROM todo ORDER BY createdAt DESC;",
-  );
-  const rows = normalizeTodoRows(rawRows);
-  renderTodos(rows ?? []);
-};
-
-const createTodo = async (text: string) => {
-  await db.query(
-    "CREATE todo CONTENT { text: $text, completed: false, createdAt: time::now() };",
-    {
-      text,
-    },
-  );
-};
-
-const setTodoCompleted = async (rid: string, completed: boolean) => {
-  await db.query(
-    "UPDATE type::thing('todo', $id) SET completed = $completed;",
-    {
-      id: shortId(rid),
-      completed,
-    },
-  );
-};
-
-const deleteTodo = async (rid: string) => {
-  await db.query("DELETE type::thing('todo', $id);", { id: shortId(rid) });
-};
-
-const initialize = async () => {
-  setStatus("Connecting...");
-
+const withAction = async (label: string, action: () => Promise<unknown>) => {
   try {
-    await db.connect();
-    await db.use({ namespace: "app", database: "app" });
-    await listTodos();
-    setStatus("Connected");
+    setStatus(`${label}...`);
+    const result = await action();
+    log(`${label} ✅`, result);
+    setStatus(`${label} OK`);
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
+    const message = error instanceof Error ? error.message : String(error);
+    log(`${label} ❌`, { error: message });
+    setStatus(message, true);
   }
 };
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const text = input.value.trim();
-  if (!text) {
-    return;
-  }
-
-  try {
-    await createTodo(text);
-    input.value = "";
-    await listTodos();
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
-  }
+connectButton.addEventListener("click", () => {
+  void withAction("connect()", async () =>
+    db.connect("tauri://", {
+      namespace: namespaceInput.value.trim(),
+      database: databaseInput.value.trim(),
+    }),
+  );
 });
 
-refreshButton.addEventListener("click", async () => {
-  try {
-    await listTodos();
-    setStatus("Synced");
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
-  }
+useButton.addEventListener("click", () => {
+  void withAction("use()", async () => {
+    await db.use({
+      namespace: namespaceInput.value.trim(),
+      database: databaseInput.value.trim(),
+    });
+    return db.db();
+  });
 });
 
-list.addEventListener("click", async (event) => {
-  const target = event.target as HTMLElement;
-  const action = target.getAttribute("data-action");
-  if (!action) {
-    return;
-  }
+healthButton.addEventListener("click", () => {
+  void withAction("health()", async () => {
+    await db.health();
+    return { ok: true };
+  });
+});
 
-  const item = target.closest<HTMLLIElement>("li[data-id]");
-  const rid = item?.dataset.id;
-  if (!rid) {
-    return;
-  }
+versionButton.addEventListener("click", () => {
+  void withAction("version()", async () => db.version());
+});
 
-  try {
-    if (action === "delete") {
-      await deleteTodo(rid);
-      await listTodos();
+infoButton.addEventListener("click", () => {
+  void withAction("info()", async () => db.info());
+});
+
+dbMetaButton.addEventListener("click", () => {
+  void withAction("db()", async () => db.db());
+});
+
+invalidateButton.addEventListener("click", () => {
+  void withAction("invalidate()", async () => {
+    await db.invalidate();
+    return { invalidated: true };
+  });
+});
+
+closeButton.addEventListener("click", () => {
+  void withAction("close()", async () => db.close());
+});
+
+signinButton.addEventListener("click", () => {
+  void withAction("signin()", async () => {
+    const auth = parseJson<Record<string, unknown>>(signinJsonInput.value, {});
+    return db.signin(auth);
+  });
+});
+
+signupButton.addEventListener("click", () => {
+  void withAction("signup()", async () => {
+    const auth = parseJson<Record<string, unknown>>(signinJsonInput.value, {});
+    return db.signup(auth);
+  });
+});
+
+authenticateButton.addEventListener("click", () => {
+  void withAction("authenticate()", async () => {
+    await db.authenticate(authTokenInput.value.trim());
+    return { authenticated: true };
+  });
+});
+
+letButton.addEventListener("click", () => {
+  void withAction("let()", async () => {
+    const name = letNameInput.value.trim();
+    const value = parseJson(letValueInput.value, letValueInput.value);
+    await db.let(name, value);
+    return { name, value };
+  });
+});
+
+unsetButton.addEventListener("click", () => {
+  void withAction("unset()", async () => {
+    const name = letNameInput.value.trim();
+    await db.unset(name);
+    return { name };
+  });
+});
+
+runButton.addEventListener("click", () => {
+  void withAction("run()", async () => {
+    const functionName = runNameInput.value.trim();
+    const args = parseJson<unknown[]>(runArgsInput.value, []);
+    return db.run(functionName, ...args);
+  });
+});
+
+queryButton.addEventListener("click", () => {
+  void withAction("query()", async () => {
+    const sql = querySqlInput.value;
+    const vars = parseJson<Record<string, unknown>>(queryVarsInput.value, {});
+    return db.query(sql, vars);
+  });
+});
+
+seedButton.addEventListener("click", () => {
+  void withAction("seed showcase", async () =>
+    db.query(
+      "DEFINE TABLE IF NOT EXISTS showcase SCHEMALESS; UPSERT showcase:demo1 CONTENT { name: 'demo one', active: true, createdAt: time::now() }; UPSERT showcase:demo2 CONTENT { name: 'demo two', active: false, createdAt: time::now() }; SELECT * FROM showcase ORDER BY createdAt DESC;",
+    ),
+  );
+});
+
+selectButton.addEventListener("click", () => {
+  void withAction("select()", async () => db.select(recordRef()));
+});
+
+createButton.addEventListener("click", () => {
+  void withAction("create()", async () => {
+    const payload = parseJson<Record<string, unknown>>(payloadInput.value, {});
+    return db.create(recordRef(), payload);
+  });
+});
+
+insertButton.addEventListener("click", () => {
+  void withAction("insert()", async () => {
+    const table = resourceInput.value.trim();
+    if (!table || table.includes(":")) {
+      throw new Error("Insert expects a table name");
     }
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
-  }
+    const payload = parseJson<unknown>(payloadInput.value, {});
+    return db.insert(table, payload);
+  });
 });
 
-list.addEventListener("change", async (event) => {
-  const target = event.target as HTMLInputElement;
-  if (target.getAttribute("data-action") !== "toggle") {
-    return;
-  }
+updateButton.addEventListener("click", () => {
+  void withAction("update()", async () => {
+    const payload = parseJson<Record<string, unknown>>(payloadInput.value, {});
+    return db.update(recordRef(), payload);
+  });
+});
 
-  const item = target.closest<HTMLLIElement>("li[data-id]");
-  const rid = item?.dataset.id;
-  if (!rid) {
-    return;
-  }
+upsertButton.addEventListener("click", () => {
+  void withAction("upsert()", async () => {
+    const payload = parseJson<Record<string, unknown>>(payloadInput.value, {});
+    return db.upsert(recordRef(), payload);
+  });
+});
 
-  try {
-    await setTodoCompleted(rid, target.checked);
-    await listTodos();
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
-  }
+mergeButton.addEventListener("click", () => {
+  void withAction("merge()", async () => {
+    const payload = parseJson<Record<string, unknown>>(payloadInput.value, {});
+    return db.merge(recordRef(), payload);
+  });
+});
+
+patchButton.addEventListener("click", () => {
+  void withAction("patch()", async () => {
+    const payload = parseJson<unknown>(payloadInput.value, {});
+    const patchOps = Array.isArray(payload)
+      ? (payload as PatchOperation[])
+      : ([
+          {
+            op: "replace",
+            path: "/name",
+            value: String(
+              (payload as Record<string, unknown>).name ?? "patched",
+            ),
+          },
+        ] as PatchOperation[]);
+
+    return db.patch(recordRef(), patchOps);
+  });
+});
+
+deleteButton.addEventListener("click", () => {
+  void withAction("delete()", async () => db.delete(recordRef()));
+});
+
+relateButton.addEventListener("click", () => {
+  void withAction("relate()", async () => {
+    const from = fromInput.value.trim();
+    const relation = relationInput.value.trim();
+    const to = toInput.value.trim();
+    const payload = parseJson<Record<string, unknown>>(payloadInput.value, {});
+    return db.relate(from, relation, to, payload);
+  });
+});
+
+clearLogButton.addEventListener("click", () => {
+  output.textContent = "";
 });
 
 window.addEventListener("beforeunload", () => {
   void db.close();
 });
 
-void initialize();
+void withAction("initial connect", async () => {
+  await db.connect("tauri://", {
+    namespace: namespaceInput.value.trim(),
+    database: databaseInput.value.trim(),
+  });
+  return db.db();
+});
