@@ -10,7 +10,7 @@ Small starter monorepo for a Tauri app that runs **embedded SurrealDB** on the R
 
 ## What is included
 
-- `apps/desktop-mobile`: Tauri app (desktop + Android-first flow)
+- root (`src`, `src-tauri`): Tauri app (desktop + Android-first flow)
 - `packages/surrealdb-js-tauri`: custom Surreal client package using Tauri RPC transport
 - `flake.nix`: Nix dev shell with Android toolchain + Rust targets
 

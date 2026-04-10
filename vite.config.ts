@@ -14,7 +14,7 @@ export default defineConfig({
     alias: {
       "@starter/surrealdb-js-tauri": fileURLToPath(
         new URL(
-          "../../packages/surrealdb-js-tauri/src/index.ts",
+          "./packages/surrealdb-js-tauri/src/index.ts",
           import.meta.url,
         ),
       ),

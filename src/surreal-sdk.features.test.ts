@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Surreal } from "../../../packages/surrealdb-js-tauri/src/index";
+import { Surreal } from "../packages/surrealdb-js-tauri/src/index";
 
 class MockTransport {
   public readonly operations: Array<string> = [];

@@ -4,8 +4,8 @@
     "version": "0.1.0",
     "identifier": "dev.starter.taurisurreal",
     "build": {
-        "beforeDevCommand": "npm run dev --workspace @starter/app",
-        "beforeBuildCommand": "npm run build --workspace @starter/app",
+        "beforeDevCommand": "npm run dev",
+        "beforeBuildCommand": "npm run build",
         "frontendDist": "../dist",
         "devUrl": "http://localhost:1420"
     },
