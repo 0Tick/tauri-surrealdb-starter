@@ -25,7 +25,7 @@ export default defineConfig({
     strictPort: true,
     host: tauriDevHost,
     hmr: {
-          host: tauriDevHost,
+          host: "localhost",
           port: 1421,
           protocol: "ws",
         },
