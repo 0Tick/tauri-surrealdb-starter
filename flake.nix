@@ -22,48 +22,71 @@
           config.android_sdk.accept_license = true;
         };
 
+        isDarwin = pkgs.stdenv.isDarwin;
+        isLinux = pkgs.stdenv.isLinux;
+
         android_sdk =
           (pkgs.androidenv.composeAndroidPackages {
-            platformVersions = [ "36" ];
+            platformVersions = [
+              "34"
+              "36"
+            ];
+            buildToolsVersions = [ "35.0.0" ];
             ndkVersions = [ "26.3.11579264" ];
             includeNDK = true;
             useGoogleAPIs = false;
             useGoogleTVAddOns = false;
-            includeEmulator = false;
-            includeSystemImages = false;
-            includeSources = true;
-            buildToolsVersions = [ "35.0.0" ];
+            includeEmulator = true;
+            includeSystemImages = true;
+            systemImageTypes = [ "google_apis_playstore" ];
+            abiVersions = [ "x86_64" ];
+            includeSources = false;
           }).androidsdk;
 
-        packages = with pkgs; [
+        basePackages = with pkgs; [
           curl
           wget
           pkg-config
 
-          nodejs_20
+          nodejs_24
           typescript-language-server
+          bun
 
           (
             with fenix.packages.${system};
-            combine [
-              complete.rustc
-              complete.cargo
-              complete.clippy
-              targets.aarch64-linux-android.latest.rust-std
-              targets.armv7-linux-androideabi.latest.rust-std
-              targets.i686-linux-android.latest.rust-std
-              targets.x86_64-linux-android.latest.rust-std
-            ]
+            combine (
+              [
+                complete.rustc
+                complete.rust-src
+                complete.cargo
+                complete.clippy
+                complete.rustfmt
+                complete.rust-analyzer
+              ]
+              ++ pkgs.lib.optionals isLinux [
+                targets.aarch64-linux-android.latest.rust-std
+                targets.armv7-linux-androideabi.latest.rust-std
+                targets.i686-linux-android.latest.rust-std
+                targets.x86_64-linux-android.latest.rust-std
+              ]
+            )
           )
-          rust-analyzer
-          openssl_3
-          android_sdk
-          jdk
-          bun
-          android-studio
         ];
 
-        libraries = with pkgs; [
+        linuxPackages = with pkgs; [
+          gst_all_1.gstreamer
+          gst_all_1.gst-plugins-base
+          gst_all_1.gst-plugins-good
+          gst_all_1.gst-plugins-bad
+          jdk
+          xdg-utils
+          clang
+          mold
+        ];
+
+        packages = basePackages ++ pkgs.lib.optionals isLinux (linuxPackages ++ [ android_sdk ]);
+
+        linuxLibraries = with pkgs; [
           gtk3
           libsoup_3
           webkitgtk_4_1
@@ -73,20 +96,35 @@
           dbus
           openssl
           librsvg
+          lsb-release
           cacert
         ];
+        darwinLibraries = with pkgs; [
+          openssl
+          libiconv
+        ];
+        libraries = if isDarwin then darwinLibraries else linuxLibraries;
       in
       {
-        devShell = pkgs.mkShell {
-          buildInputs = packages ++ libraries;
-
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}:$LD_LIBRARY_PATH";
-          XDG_DATA_DIRS = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS";
-          ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
-          NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
-          SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-          GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
-        };
+        devShell = pkgs.mkShell (
+          {
+            buildInputs = packages ++ libraries;
+            PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+          }
+          // pkgs.lib.optionalAttrs isLinux {
+            LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}:$LD_LIBRARY_PATH";
+            XDG_DATA_DIRS = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS";
+            ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
+            NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
+            GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
+            GIO_MODULE_DIR = "${pkgs.glib-networking}/lib/gio/modules/";
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_LINKER" =
+              "${pkgs.clang}/bin/clang";
+            "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS" =
+              "-C link-arg=-fuse-ld=${pkgs.mold}/bin/mold";
+          }
+        );
       }
     );
 }
