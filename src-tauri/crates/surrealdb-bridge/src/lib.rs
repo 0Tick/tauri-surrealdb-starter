@@ -1,10 +1,16 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[cfg(feature = "file-buckets")]
+use crate::capabilities::Capabilities;
 use serde::{Deserialize, Serialize};
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 use surrealdb::engine::local::{Db, SurrealKv};
+#[cfg(feature = "file-buckets")]
+use surrealdb::opt::capabilities::{self, ExperimentalFeature};
+use surrealdb::opt::Config;
 use surrealdb::types::Value as SurrealValue;
 use surrealdb::Surreal;
 use tokio::sync::Mutex;
@@ -128,9 +134,15 @@ fn to_json_value(value: SurrealValue) -> Result<JsonValue, String> {
 }
 
 fn storage_dir(app_data_dir: &Path) -> Result<PathBuf, String> {
-    let db_dir = app_data_dir.join("surrealdb").join("main");
+    let db_dir = app_data_dir.join("surrealdb").join("db");
     std::fs::create_dir_all(&db_dir).map_err(map_error)?;
-    Ok(db_dir)
+    fs::canonicalize(db_dir).map_err(map_error)
+}
+
+fn files_dir(app_data_dir: &Path) -> Result<PathBuf, String> {
+    let files_dir = app_data_dir.join("surrealdb").join("files");
+    std::fs::create_dir_all(&files_dir).map_err(map_error)?;
+    fs::canonicalize(files_dir).map_err(map_error)
 }
 
 async fn ensure_db(state: &DatabaseState, app_data_dir: &Path) -> Result<Surreal<Db>, String> {
@@ -138,8 +150,20 @@ async fn ensure_db(state: &DatabaseState, app_data_dir: &Path) -> Result<Surreal
 
     if guard.is_none() {
         let db_dir = storage_dir(app_data_dir)?;
+        let files_dir = files_dir(app_data_dir)?;
+        std::env::set_var(
+            "SURREAL_BUCKET_FOLDER_ALLOWLIST",
+            files_dir.to_string_lossy().to_string(),
+        );
+        #[cfg(feature = "file-buckets")]
+        let capabilities =
+            Capabilities::new().with_experimental_feature_allowed(ExperimentalFeature::Files);
+        #[cfg(feature = "file-buckets")]
+        let config = Config::default().capabilities(capabilities);
+        #[cfg(not(feature = "file-buckets"))]
+        let config = Config::default();
         let endpoint = db_dir.to_string_lossy().to_string();
-        let db = Surreal::new::<SurrealKv>(endpoint)
+        let db = Surreal::new::<SurrealKv>((endpoint, config))
             .await
             .map_err(map_error)?;
         *guard = Some(db);

@@ -1,4 +1,5 @@
 import { Surreal, type PatchOperation } from "@starter/surrealdb-js-tauri";
+import { invoke } from "@tauri-apps/api/core";
 import "./style.css";
 
 const status = document.querySelector<HTMLSpanElement>("#status");
@@ -314,14 +315,14 @@ patchButton.addEventListener("click", () => {
     const patchOps = Array.isArray(payload)
       ? (payload as PatchOperation[])
       : ([
-          {
-            op: "replace",
-            path: "/name",
-            value: String(
-              (payload as Record<string, unknown>).name ?? "patched",
-            ),
-          },
-        ] as PatchOperation[]);
+        {
+          op: "replace",
+          path: "/name",
+          value: String(
+            (payload as Record<string, unknown>).name ?? "patched",
+          ),
+        },
+      ] as PatchOperation[]);
 
     return db.patch(recordRef(), patchOps);
   });
@@ -354,5 +355,7 @@ void withAction("initial connect", async () => {
     namespace: namespaceInput.value.trim(),
     database: databaseInput.value.trim(),
   });
-  return db.db();
-});
+  void withAction("tauriFilesPath", async () => {
+    return await invoke("db_get_files_path");
+  });
+})

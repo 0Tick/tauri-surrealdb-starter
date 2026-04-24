@@ -13,6 +13,7 @@ Small starter monorepo for a Tauri app that runs **embedded SurrealDB** on the R
 - root (`src`, `src-tauri`): Tauri app (desktop + android)
 - `packages/surrealdb-js-tauri`: custom Surreal client package using Tauri RPC transport
 - `flake.nix`: Nix dev shell with Android toolchain + Rust targets
+- Surrealdb file buckets support with the "file-buckets" feature flag. The files are stored in the AppData under surrealdb/files
 
 ## Project Scope
 

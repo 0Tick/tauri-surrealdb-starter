@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use serde_json::Value as JsonValue;
+use std::path::PathBuf;
 use surrealdb_bridge as db_bridge;
 use tauri::{AppHandle, Manager, State};
 
@@ -12,6 +11,11 @@ fn map_error(error: impl ToString) -> String {
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(map_error)
+}
+
+#[tauri::command]
+pub fn db_get_files_path() -> Result<String, String> {
+    std::env::var("SURREAL_BUCKET_FOLDER_ALLOWLIST").map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -233,4 +237,3 @@ pub async fn db_query(
 pub async fn db_close(state: State<'_, DatabaseState>) -> Result<db_bridge::ApiResponse, String> {
     db_bridge::db_close(&state).await
 }
-
