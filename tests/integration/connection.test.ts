@@ -1,0 +1,216 @@
+import { describe, expect, mock, test } from "bun:test";
+import { Features, RecordId } from "surrealdb";
+import {
+    createIdleSurreal,
+    createSurreal,
+    killServer,
+    requestVersion,
+    SURREAL_PROTOCOL,
+    spawnServer,
+    VERSION_CHECK,
+} from "./__helpers__";
+
+const { is3x } = await requestVersion();
+
+describe("connection", async () => {
+    test.todoIf(!VERSION_CHECK)("check version", async () => {
+        const surreal = await createSurreal();
+
+        const { version } = await surreal.version();
+        expect(version.startsWith("surrealdb-")).toBe(true);
+    });
+
+    test("allowed rpcs without namespace or database", async () => {
+        const surreal = await createSurreal({
+            unselected: true,
+        });
+
+        await surreal.version();
+        await surreal.invalidate();
+    });
+
+    test("disallowed rpcs without namespace or database", async () => {
+        const surreal = await createSurreal({
+            unselected: true,
+        });
+
+        expect(async () => {
+            await surreal.query("SELECT * FROM test");
+        }).toThrow();
+    });
+
+    test("access selected namespace and database", async () => {
+        const surreal = await createSurreal({
+            unselected: true,
+        });
+
+        await surreal.use({
+            namespace: "test-ns",
+            database: "test-db",
+        });
+
+        expect(surreal.namespace).toBe("test-ns");
+        expect(surreal.database).toBe("test-db");
+    });
+
+    test.if(is3x)("can select default namespace and database", async () => {
+        const surreal = await createSurreal({
+            unselected: true,
+        });
+
+        const { namespace, database } = await surreal.use();
+        console.log(namespace, database);
+
+        expect(namespace).toBe("main");
+        expect(database).toBe("main");
+    });
+
+    test("connection status", async () => {
+        const { surreal, connect } = await createIdleSurreal();
+
+        expect(surreal.status).toBe("disconnected");
+        connect();
+        expect(surreal.status).toBe("connecting");
+        await surreal.ready;
+        expect(surreal.status).toBe("connected");
+        await surreal.close();
+        expect(surreal.status).toBe("disconnected");
+    });
+
+    test("close on disconnected", async () => {
+        const { surreal } = await createIdleSurreal();
+
+        await surreal.close();
+        await surreal.close();
+        await surreal.close();
+    });
+
+    test("multiple close calls", async () => {
+        const surreal = await createSurreal();
+
+        await surreal.close();
+        await surreal.close();
+        await surreal.close();
+    });
+
+    test("close after kill", async () => {
+        const surreal = await createSurreal();
+
+        await killServer();
+        await surreal.close();
+        await spawnServer();
+    });
+
+    test("connected event version", async () => {
+        const { surreal, connect } = await createIdleSurreal();
+        const handleConnected = mock((_version: string) => {});
+
+        surreal.subscribe("connected", handleConnected);
+
+        await connect();
+
+        const { version } = await surreal.version();
+
+        expect(handleConnected).toHaveBeenCalledTimes(1);
+        expect(handleConnected).toHaveBeenCalledWith(version);
+    });
+
+    test.skipIf(SURREAL_PROTOCOL === "mem")("access token", async () => {
+        const surreal = await createSurreal({
+            unselected: true,
+        });
+
+        await surreal.ready;
+
+        expect(surreal.accessToken).toBeString();
+    });
+
+    test("sequential connects", async () => {
+        const { connect } = await createIdleSurreal();
+
+        await connect();
+        await connect();
+        await connect();
+        await connect();
+        await connect();
+    });
+
+    test("unawaited sequential connects", async () => {
+        const { connect } = await createIdleSurreal();
+
+        connect();
+        connect();
+        connect();
+        connect();
+
+        await connect();
+    });
+
+    test("using event", async () => {
+        const { surreal, connect } = await createIdleSurreal();
+        const handle = mock(() => {});
+
+        surreal.subscribe("using", handle);
+
+        await connect({
+            namespace: "foo",
+            database: "bar",
+        });
+
+        await surreal.use({
+            namespace: "hello",
+            database: null,
+        });
+
+        expect(handle).nthCalledWith(1, {
+            namespace: "foo",
+            database: "bar",
+        });
+
+        expect(handle).nthCalledWith(2, {
+            namespace: "hello",
+            database: undefined,
+        });
+    });
+
+    test.todoIf(SURREAL_PROTOCOL === "http")("use seperately", async () => {
+        const surreal = await createSurreal({ unselected: true });
+
+        await surreal.use({
+            namespace: "foo",
+        });
+
+        await surreal.use({
+            database: "bar",
+        });
+
+        expect(surreal.namespace).toBe("foo");
+        expect(surreal.database).toBe("bar");
+
+        await surreal.query(/* surql */ `DEFINE TABLE person SCHEMALESS`);
+        await surreal.select(new RecordId("person", 1));
+    });
+
+    test("use correction", async () => {
+        const surreal = await createSurreal();
+
+        await surreal.use({
+            namespace: "foo",
+        });
+
+        const current = await surreal.use({
+            database: "bar",
+        });
+
+        expect(current.namespace).toBe("foo");
+        expect(current.database).toBe("bar");
+    });
+
+    test("feature support", async () => {
+        const surreal = await createSurreal();
+
+        expect(surreal.isFeatureSupported(Features.LiveQueries)).toBeBoolean();
+        expect(surreal.isFeatureSupported(Features.Sessions)).toBeBoolean();
+        expect(surreal.isFeatureSupported(Features.RefreshTokens)).toBeBoolean();
+    });
+});

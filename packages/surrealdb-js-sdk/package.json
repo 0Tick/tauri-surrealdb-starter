@@ -1,0 +1,58 @@
+{
+    "name": "surrealdb",
+    "version": "2.0.3",
+    "type": "module",
+    "license": "Apache-2.0",
+    "description": "The official SurrealDB SDK for JavaScript.",
+    "homepage": "https://github.com/surrealdb/surrealdb.js",
+    "keywords": [
+        "surrealdb",
+        "surrealdb.js",
+        "query builder",
+        "orm"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/surrealdb/surrealdb.js.git"
+    },
+    "scripts": {
+        "build": "bun run build.ts",
+        "deploy": "bun run ../../scripts/publish.ts"
+    },
+    "devDependencies": {
+        "@types/bun": "^1.2.21",
+        "@types/node": "^24.3.0",
+        "compare-versions": "^6.1.1",
+        "dts-bundle-generator": "^9.5.1",
+        "rolldown": "^1.0.0-beta.31"
+    },
+    "peerDependencies": {
+        "typescript": "^5.0.0",
+        "tslib": "^2.6.3"
+    },
+    "dependencies": {
+        "@tauri-apps/api": "^2",
+        "@surrealdb/cbor": "2.0.0-alpha.4",
+        "uuidv7": "^1.0.1"
+    },
+    "types": "./dist/surrealdb.d.ts",
+    "main": "./dist/surrealdb.mjs",
+    "exports": {
+        ".": {
+            "node": {
+                "types": "./dist/surrealdb.d.ts",
+                "import": "./dist/surrealdb.server.mjs",
+                "require": "./dist/surrealdb.server.cjs"
+            },
+            "types": "./dist/surrealdb.d.ts",
+            "require": "./dist/surrealdb.cjs",
+            "import": "./dist/surrealdb.mjs"
+        }
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENCE",
+        "SECURITY.md"
+    ]
+}

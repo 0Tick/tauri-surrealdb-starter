@@ -1,0 +1,12 @@
+{
+    "name": "@surrealdb/tests",
+    "type": "module",
+    "private": true,
+    "dependencies": {
+        "@surrealdb/cbor": "2.0.0-alpha.4",
+        "surrealdb": "workspace:*",
+        "@surrealdb/node": "workspace:*",
+        "@surrealdb/wasm": "workspace:*",
+        "get-port": "^7.1.0"
+    }
+}
