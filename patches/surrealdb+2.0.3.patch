@@ -1,5 +1,5 @@
 diff --git a/node_modules/surrealdb/dist/surrealdb.cjs b/node_modules/surrealdb/dist/surrealdb.cjs
-index cabd452..88b63d2 100644
+index cabd452..d67deba 100644
 --- a/node_modules/surrealdb/dist/surrealdb.cjs
 +++ b/node_modules/surrealdb/dist/surrealdb.cjs
 @@ -1,9 +1,8 @@
@@ -696,7 +696,8 @@ index cabd452..88b63d2 100644
  };
 -
  //#endregion
- //#region ../../node_modules/uuidv7/dist/index.js
+-//#region ../../node_modules/uuidv7/dist/index.js
++//#region node_modules/uuidv7/dist/index.js
  /**
  * uuidv7: A JavaScript implementation of UUID version 7
  *
@@ -1888,7 +1889,7 @@ index cabd452..88b63d2 100644
  	return Array.isArray(params) && typeof params[0] === "undefined" && typeof params[1] === "undefined";
  }
 +//#endregion
-+//#region ../../node_modules/@tauri-apps/api/external/tslib/tslib.es6.js
++//#region node_modules/@tauri-apps/api/external/tslib/tslib.es6.js
 +/******************************************************************************
 +Copyright (c) Microsoft Corporation.
  
@@ -1915,7 +1916,7 @@ index cabd452..88b63d2 100644
 +	return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
 +}
 +//#endregion
-+//#region ../../node_modules/@tauri-apps/api/core.js
++//#region node_modules/@tauri-apps/api/core.js
 +var _Channel_onmessage, _Channel_nextMessageIndex, _Channel_pendingMessages, _Channel_messageEndIndex;
 +/**
 +* Invoke your custom commands.
@@ -3083,7 +3084,7 @@ index 60c2736..322f6d9 100644
   * This utility allows you to wrap engines and listen to internal communication
   * within the SDK. Each operation is wrapped in a diagnostic event and emitted to the
 diff --git a/node_modules/surrealdb/dist/surrealdb.mjs b/node_modules/surrealdb/dist/surrealdb.mjs
-index f52b730..dda890e 100644
+index f52b730..1e0db3b 100644
 --- a/node_modules/surrealdb/dist/surrealdb.mjs
 +++ b/node_modules/surrealdb/dist/surrealdb.mjs
 @@ -2,7 +2,6 @@
@@ -3777,7 +3778,8 @@ index f52b730..dda890e 100644
  };
 -
  //#endregion
- //#region ../../node_modules/uuidv7/dist/index.js
+-//#region ../../node_modules/uuidv7/dist/index.js
++//#region node_modules/uuidv7/dist/index.js
  /**
  * uuidv7: A JavaScript implementation of UUID version 7
  *
@@ -4969,7 +4971,7 @@ index f52b730..dda890e 100644
  	return Array.isArray(params) && typeof params[0] === "undefined" && typeof params[1] === "undefined";
  }
 +//#endregion
-+//#region ../../node_modules/@tauri-apps/api/external/tslib/tslib.es6.js
++//#region node_modules/@tauri-apps/api/external/tslib/tslib.es6.js
 +/******************************************************************************
 +Copyright (c) Microsoft Corporation.
 +
@@ -4996,7 +4998,7 @@ index f52b730..dda890e 100644
 +	return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
 +}
 +//#endregion
-+//#region ../../node_modules/@tauri-apps/api/core.js
++//#region node_modules/@tauri-apps/api/core.js
 +var _Channel_onmessage, _Channel_nextMessageIndex, _Channel_pendingMessages, _Channel_messageEndIndex;
 +/**
 +* Invoke your custom commands.

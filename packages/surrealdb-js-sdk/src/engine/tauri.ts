@@ -629,13 +629,13 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     // No-op for Tauri invoke/channel transport.
   }
 
-  async sessions(): Promise<Uuid[]> {
+  override async sessions(): Promise<Uuid[]> {
     return Array.from(this.#sessionMap.keys())
       .filter((key) => key !== ROOT_SESSION_KEY)
       .map((key) => new Uuid(key));
   }
 
-  async attach(session: Uuid): Promise<void> {
+  override async attach(session: Uuid): Promise<void> {
     if (!this.#active) {
       throw new ConnectionUnavailableError();
     }
@@ -656,7 +656,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     });
   }
 
-  async detach(session: Uuid): Promise<void> {
+  override async detach(session: Uuid): Promise<void> {
     const key = session.toString();
     const backendSessionId = this.#sessionMap.get(key);
     if (!backendSessionId) {
@@ -671,7 +671,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     });
   }
 
-  async use(
+  override async use(
     what: { namespace?: string | null; database?: string | null },
     session: Session,
   ) {
@@ -699,7 +699,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     };
   }
 
-  async reset(session: Session): Promise<void> {
+  override async reset(session: Session): Promise<void> {
     const backendSessionId = await this.#backendSession(session);
     await invokeBridge("db_use_session", {
       sessionId: backendSessionId,
@@ -712,7 +712,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     });
   }
 
-  async set(name: string, value: unknown, session: Session): Promise<void> {
+  override async set(name: string, value: unknown, session: Session): Promise<void> {
     const backendSessionId = await this.#backendSession(session);
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
       throw new UnexpectedServerResponseError(`Invalid variable name: ${name}`);
@@ -731,7 +731,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     });
   }
 
-  async unset(name: string, session: Session): Promise<void> {
+  override async unset(name: string, session: Session): Promise<void> {
     const backendSessionId = await this.#backendSession(session);
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
       throw new UnexpectedServerResponseError(`Invalid variable name: ${name}`);
@@ -749,14 +749,14 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     });
   }
 
-  async invalidate(session: Session): Promise<void> {
+  override async invalidate(session: Session): Promise<void> {
     tauriDebug("session", "invalidate requested", {
       session: session ? session.toString() : ROOT_SESSION_KEY,
     });
     // Current bridge surface does not implement auth-token invalidation yet.
   }
 
-  async begin(session: Session): Promise<Uuid> {
+  override async begin(session: Session): Promise<Uuid> {
     const backendSessionId = await this.#backendSession(session);
     const txId = await invokeBridge<string>("db_begin_transaction", {
       sessionId: backendSessionId,
@@ -769,7 +769,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     return new Uuid(txId);
   }
 
-  async commit(txn: Uuid, session: Session): Promise<void> {
+  override async commit(txn: Uuid, session: Session): Promise<void> {
     const backendSessionId = await this.#backendSession(session);
     tauriDebug("tx", "transaction commit requested", {
       transactionId: txn.toString(),
@@ -781,7 +781,7 @@ export class TauriEngine extends RpcEngine implements SurrealEngine {
     });
   }
 
-  async cancel(txn: Uuid, session: Session): Promise<void> {
+  override async cancel(txn: Uuid, session: Session): Promise<void> {
     const backendSessionId = await this.#backendSession(session);
     tauriDebug("tx", "transaction cancel requested", {
       transactionId: txn.toString(),

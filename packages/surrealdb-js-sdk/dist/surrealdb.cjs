@@ -2137,7 +2137,7 @@ var StringRecordId = class StringRecordId extends Value {
 	}
 };
 //#endregion
-//#region ../../node_modules/uuidv7/dist/index.js
+//#region node_modules/uuidv7/dist/index.js
 /**
 * uuidv7: A JavaScript implementation of UUID version 7
 *
@@ -6597,7 +6597,7 @@ function isEmptyUseParams(params) {
 	return Array.isArray(params) && typeof params[0] === "undefined" && typeof params[1] === "undefined";
 }
 //#endregion
-//#region ../../node_modules/@tauri-apps/api/external/tslib/tslib.es6.js
+//#region node_modules/@tauri-apps/api/external/tslib/tslib.es6.js
 /******************************************************************************
 Copyright (c) Microsoft Corporation.
 
@@ -6624,7 +6624,7 @@ function __classPrivateFieldSet(receiver, state, value, kind, f) {
 	return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
 }
 //#endregion
-//#region ../../node_modules/@tauri-apps/api/core.js
+//#region node_modules/@tauri-apps/api/core.js
 var _Channel_onmessage, _Channel_nextMessageIndex, _Channel_pendingMessages, _Channel_messageEndIndex;
 /**
 * Invoke your custom commands.
