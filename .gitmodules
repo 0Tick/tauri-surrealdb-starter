@@ -1,0 +1,4 @@
+[submodule "surrealdb-js-sdk"]
+	path = surrealdb-js-sdk
+	url = https://github.com/0Tick/surrealdb.js-tauri.git
+	branch = tauri

@@ -1,9 +1,9 @@
 # Tauri SurrealDB Starter
 
-A cross-platform starter template for building desktop and mobile applications with [Tauri](https://tauri.app) and an **embedded [SurrealDB](https://surrealdb.com)** instance with on device persistence. The database runs entirely inside the Tauri process — no external server, sidecar or background processes required — and writes to the device filesystem.
+A cross-platform starter template for building desktop and mobile applications with [Tauri](https://tauri.app) and an **embedded [SurrealDB](https://surrealdb.com)** instance with on-device persistence. The database runs entirely inside the Tauri process — no external server, sidecar, or background processes required — and writes to the device filesystem.
 
 > **Platform status:** tested on Linux and Android.  
-> macOS, iOS and Windows should in theory also work, but are not yet tested. Please submit any bugs or issues that you find.
+> macOS, iOS, and Windows should in theory also work, but are not yet tested. Please submit any bugs or issues that you find.
 
 ## What's included
 
@@ -13,13 +13,15 @@ A cross-platform starter template for building desktop and mobile applications w
 | App shell | Tauri 2 |
 | Database | SurrealDB 3 (embedded via `kv-surrealkv`) |
 | Rust bridge | `surreal_tauri_bridge` crate — sessions, transactions, live streams |
-| JS transport | Patched SurrealDB JS SDK with a `tauri://embedded` engine |
+| JS SDK | [0Tick/surrealdb.js-tauri](https://github.com/0Tick/surrealdb.js-tauri) (`tauri` branch) with a `tauri://` engine |
 
-The goal is to give you a fully working foundation for applications that need the complete SurrealDB feature set (including the experimenta File Buckets), with persistence on the device and want to be cross platform.
+The JavaScript SDK is vendored as a git submodule. The starter consumes it through Bun workspaces (`surrealdb: workspace:*`), so the app imports `surrealdb` normally while the source lives in `surrealdb-js-sdk/`.
+
+The goal is to give you a fully working foundation for applications that need the complete SurrealDB feature set (including the experimental File Buckets), with persistence on the device and cross-platform support.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) (Or other javascript runtime and package manager)
+- [Bun](https://bun.sh) (or another JavaScript runtime and package manager)
 - [Rust toolchain](https://rustup.rs)
 - [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform
 
@@ -30,18 +32,29 @@ OR
 ## Quick start
 
 ```bash
-#If using nix
+# If using nix
 nix develop
-# 1. Install JS dependencies
+
+# 1. Clone this repo with the SDK submodule
+git clone --recurse-submodules https://github.com/0Tick/tauri-surrealdb-starter.git
+cd tauri-surrealdb-starter
+
+# If you already cloned without submodules:
+# git submodule update --init --recursive
+
+# 2. Build the SDK (required on first checkout or when sdk was modified or updated)
+./scripts/build-sdk.sh
+
+# 3. Install app dependencies
 bun install
 
-# 2. Verify the frontend compiles
+# 4. Verify the frontend compiles
 bun run check
 
-# 3. Verify the Rust crates compile
+# 5. Verify the Rust crates compile
 cd src-tauri && cargo check && cd ..
 
-# 4. Launch in development mode
+# 6. Launch in development mode
 bun run tauri dev
 ```
 
@@ -51,15 +64,14 @@ The app opens with a built-in test suite that exercises the full SurrealDB featu
 
 This starter follows the same connection flow as the official SurrealDB JavaScript SDK guide (`new Surreal()` + `connect()` + `signin()`/`use()`).
 
-### Create and connect a clientnow
+### Create and connect a client
 
 ```typescript
 import { Surreal } from 'surrealdb';
 
-// Create a Surreal instance
 const db = new Surreal();
 
-// Connect to the embedded datastore
+// Connect to the embedded datastore via the Tauri transport
 await db.connect('tauri://embedded', {
   reconnect: false,
 });
@@ -67,7 +79,6 @@ await db.connect('tauri://embedded', {
 // Optional auth (same pattern as websocket usage)
 // await db.signin({ username: 'root', password: 'root' });
 
-// Select namespace/database
 await db.use({
   namespace: 'app',
   database: 'app',
@@ -79,10 +90,8 @@ await db.use({
 ```typescript
 await db.use({ namespace: 'myapp', database: 'main' });
 
-// Plain query
 const users = await db.query('SELECT * FROM user WHERE active = true');
 
-// Typed query
 type User = { id: RecordId; name: string; email: string };
 const [result] = await db.query<[User[]]>('SELECT * FROM user LIMIT 10');
 ```
@@ -92,35 +101,27 @@ const [result] = await db.query<[User[]]>('SELECT * FROM user LIMIT 10');
 ```typescript
 import { RecordId } from 'surrealdb';
 
-// Create a record with an auto-generated ID
 const post = await db.create('post', { title: 'Hello world', draft: true });
-
-// Create a record with a specific ID
 await db.create(new RecordId('post', 'my-slug'), { title: 'Fixed ID post' });
-
-// Update fields on a record
 await db.merge(new RecordId('post', 'my-slug'), { draft: false });
-
-// Delete a record
 await db.delete(new RecordId('post', 'my-slug'));
 ```
 
 ### File Buckets (experimental)
 
-SurrealDB file buckets are currently experimental in SurrealDB 3.Enabling is as simple as setting the file bucket feature flag in the tauri `cargo.toml`
+SurrealDB file buckets are currently experimental in SurrealDB 3. Enable them by setting the file bucket feature flag in the Tauri `Cargo.toml`:
 
 ```toml
-surreal_tauri_bridge = { path = "crates/surreal_tauri_bridge", features = ["file-buckets"]}
+surreal_tauri_bridge = { path = "crates/surreal_tauri_bridge", features = ["file-buckets"] }
 ```
 
-A folder files gets automatically generated under $APPDATA/surrealdb/files which is then added to the allowlist. From there you can get the allow list from the frontend, initialize the Bucket and then use it to store files.
+A `files` folder is created under `$APPDATA/surrealdb/files` and added to the allowlist. From the frontend you can read that allowlist, define a bucket, and store files.
 
 ```typescript
-import { FileRef, getBucketFolderAllowlist } from 'surrealdb';
+import { FileRef } from 'surrealdb';
 
-// Read the allowlisted bucket folder from the Rust bridge.
-// This command ensures the embedded bridge is initialized first.
-const [bucketFolder] = await getBucketFolderAllowlist();
+const allowlist = await db.getBucketFolderAllowlist();
+const bucketFolder = allowlist[0];
 
 if (!bucketFolder) {
   throw new Error('No allowlisted bucket folder configured');
@@ -128,16 +129,11 @@ if (!bucketFolder) {
 
 const escapedBucketFolder = bucketFolder.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-// Define a persistent folder-backed bucket inside the allowlist.
 await db.query(`DEFINE BUCKET IF NOT EXISTS uploads BACKEND 'folder' PATH '${escapedBucketFolder}';`);
-
-// Write file contents
 await db.query('f"uploads:/hello.txt".put("Hello from SurrealDB buckets");');
 
-// Read file contents back as a string
 const [text] = await db.query<[string]>('RETURN <string>f"uploads:/hello.txt".get();');
 
-// Store a file pointer inside a regular record
 await db.create('asset').content({
   name: 'welcome-text',
   file: new FileRef('uploads', '/hello.txt'),
@@ -184,7 +180,6 @@ const subscription: LiveSubscription = await db.live('post', (action, record) =>
   console.log(action, record); // 'CREATE' | 'UPDATE' | 'DELETE', typed record
 });
 
-// Stop receiving updates
 subscription.kill();
 ```
 
@@ -197,34 +192,102 @@ await db.close();
 ## Project structure
 
 ```
+.gitmodules                      Submodule config for the SDK fork
+src/                             SvelteKit frontend and built-in test console
 src-tauri/
   crates/
-    surreal_tauri_bridge/   — Rust crate: datastore lifecycle, sessions,
-                              transactions, live stream IPC
-  src/
-    commands.rs     — Tauri commands exposed to the frontend
-    lib.rs
+    surreal_tauri_bridge/        Embedded SurrealDB, sessions, transactions,
+                                 live notifications, and Tauri IPC commands
+  src/                           Tauri app entry (`lib.rs`, `main.rs`)
 
-packages/
-  surrealdb-js-sdk/ — local working copy used to maintain the Tauri
-                      transport changes before generating a patch
-patches/
-  surrealdb+2.0.3.patch — patch-package patch applied to npm surrealdb
+surrealdb-js-sdk/                Git submodule → 0Tick/surrealdb.js-tauri (`tauri` branch)
+  packages/
+    sdk/                         `surrealdb` npm package consumed by this app
+    sqon/                        `@surrealdb/sqon` value types and codecs
+
+package.json                     Bun workspaces + `surrealdb: workspace:*`
 ```
 
-## Updating the patched SurrealDB SDK
+At install time, Bun links `node_modules/surrealdb` to `surrealdb-js-sdk/packages/sdk`.
 
-The project consumes `surrealdb` from npm (`surrealdb: 2.0.3`) and applies
-the Tauri bridge via patch-package (`patches/surrealdb+2.0.3.patch`).
+### SDK submodule
 
-1. Sync upstream SDK source into `packages/surrealdb-js-sdk`.
-2. Re-apply the Tauri engine in `packages/surrealdb-js-sdk/src/engine/tauri.ts`.
-3. Verify the engine is exported in `packages/surrealdb-js-sdk/src/engine/index.ts`.
-4. Verify default engine fallback in `packages/surrealdb-js-sdk/src/controller/index.ts` uses `createTauriEngines()`.
-5. Rebuild the local SDK copy so `packages/surrealdb-js-sdk/dist` is up to date.
-6. Copy updated SDK publish artifacts into `node_modules/surrealdb` (at minimum `dist/*` and `package.json`).
-7. Regenerate the patch with `npx patch-package surrealdb`.
-8. Run `bun run check` and `cargo check`.
+| Setting | Value |
+|---|---|
+| Path | `surrealdb-js-sdk/` |
+| Remote | [https://github.com/0Tick/surrealdb.js-tauri.git](https://github.com/0Tick/surrealdb.js-tauri.git) |
+| Branch | `tauri` |
+| Upstream base | [surrealdb/surrealdb.js](https://github.com/surrealdb/surrealdb.js) |
+
+The `tauri` branch contains the embedded transport and related API wiring. The fork's `upstream` remote points at the official surrealdb.js repository for merging new releases.
+
+## Updating the SurrealDB SDK
+
+### Pull the latest `tauri` branch
+
+From the repo root:
+
+```bash
+git submodule update --init --remote surrealdb-js-sdk
+./scripts/build-sdk.sh
+bun install
+bun run check
+git add surrealdb-js-sdk
+```
+
+Or from inside the submodule:
+
+```bash
+cd surrealdb-js-sdk
+git pull origin tauri
+cd ..
+./scripts/build-sdk.sh
+bun install
+git add surrealdb-js-sdk
+```
+
+`git submodule update --remote` follows the branch configured in `.gitmodules` (`branch = tauri`).
+
+### Merge upstream surrealdb.js into the fork
+
+To bring official SDK changes onto the Tauri branch:
+
+```bash
+cd surrealdb-js-sdk
+git fetch upstream
+git merge upstream/main   # or rebase, as you prefer
+# resolve conflicts, rebuild, test
+git push origin tauri
+cd ..
+git submodule update --init --remote surrealdb-js-sdk
+git add surrealdb-js-sdk
+```
+
+### Tauri-specific files on the `tauri` branch
+
+| Path | Purpose |
+|---|---|
+| `packages/sdk/src/engine/tauri.ts` | Tauri invoke + channel RPC engine |
+| `packages/sdk/src/engine/index.ts` | Registers the `tauri:` engine in `createRemoteEngines()` |
+| `packages/sdk/src/controller/index.ts` | `getBucketFolderAllowlist()` controller hook |
+| `packages/sdk/src/api/surreal.ts` | Public `getBucketFolderAllowlist()` API |
+| `packages/sdk/build.ts` | Marks `@tauri-apps/api/core` as an external bundle dependency |
+| `packages/sdk/package.json` | Dev + optional peer dependency on `@tauri-apps/api` (needed to build declarations) |
+| `packages/sqon/src/value/uuid.ts` | Guards `SharedArrayBuffer` usage for Tauri webviews |
+
+After changing SDK source, always rebuild before running the app:
+
+```bash
+./scripts/build-sdk.sh
+```
+
+Restart the dev server after rebuilding (`bun run tauri dev`).
+
+### Notes
+
+- Connect with `tauri://embedded` (or any `tauri://…` URL); the host and path are ignored.
+- `@tauri-apps/api` must be installed in the app (listed in root `package.json`).
+- On a fresh clone, build the SDK before `bun run dev` or `bun run tauri dev` — the submodule ships source, not prebuilt `dist/` artifacts.
 
 ## Debug logging
 
@@ -240,11 +303,3 @@ localStorage.setItem('surreal.tauri.debug', '1');
 // Disable persistent logging
 localStorage.removeItem('surreal.tauri.debug');
 ```
-
-## Documentation
-
-| Document | Description |
-|---|---|
-| [docs/architecture-and-contract.md](docs/architecture-and-contract.md) | IPC protocol, transport contract, and engine design |
-| [docs/validation-and-handoff.md](docs/validation-and-handoff.md) | Validation matrix and release checklist |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues: channel lifecycle, stale sessions, auth refresh |

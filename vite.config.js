@@ -1,11 +1,10 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-import { dirname, resolve } from "node:path";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const host = process.env.TAURI_DEV_HOST;
 const rootDir = dirname(fileURLToPath(import.meta.url));
-const sdkDistDir = resolve(rootDir, "packages/surrealdb-js-sdk/dist");
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -21,7 +20,7 @@ export default defineConfig(async () => ({
     strictPort: true,
     host: host || false,
     fs: {
-      allow: [rootDir, sdkDistDir],
+      allow: [rootDir],
     },
     hmr: host
       ? {

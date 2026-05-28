@@ -5,13 +5,16 @@
 import adapter from "@sveltejs/adapter-static";
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 
+const staticAdapter = {
+  name: "adapter-static-legacy-wrapper",
+  adapt: async (builder) => adapter(builder),
+};
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter({
-      fallback: "index.html",
-    }),
+    adapter: staticAdapter,
   },
 };
 

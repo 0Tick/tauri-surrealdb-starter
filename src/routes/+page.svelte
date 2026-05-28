@@ -3,7 +3,7 @@
   import LiveFeedContent from "$lib/components/test-console/LiveFeedContent.svelte";
   import PayloadSnapshotsContent from "$lib/components/test-console/PayloadSnapshotsContent.svelte";
   import TestResultsContent from "$lib/components/test-console/TestResultsContent.svelte";
-  import { RecordId, Surreal, Table, type Frame, type LiveSubscription } from "surrealdb";
+  import { RecordId, Surreal, Table, type Frame, type LiveSubscription, surql } from "surrealdb";
 
   type TestStatus = "idle" | "running" | "pass" | "fail";
 
@@ -41,6 +41,43 @@
     error?: string;
   };
 
+  type ConcurrentRun = {
+    id: string;
+    startedAtMs: number;
+    finishedAtMs: number;
+    durationMs: number;
+  };
+
+  type FrameTimingEntry = {
+    sequence: number;
+    frameType: "value" | "done" | "error";
+    statement: number;
+    arrivedAtMs: number;
+    serverDurationMs: number | null;
+    summary: string;
+  };
+
+  type StatementTimingSegment = {
+    kind: "server" | "client";
+    ms: number;
+    sequence?: number;
+    frameType?: FrameTimingEntry["frameType"];
+    tip: string;
+  };
+
+  type StatementFrameTiming = {
+    statement: number;
+    label: string;
+    frameCount: number;
+    startedAtMs: number;
+    finishedAtMs: number;
+    spanMs: number;
+    serverDurationMs: number | null;
+    clientOverheadMs: number;
+    segments: StatementTimingSegment[];
+    totalMs: number;
+  };
+
   const BASE_TESTS: TestRow[] = [
     {
       key: "init",
@@ -60,6 +97,20 @@
       key: "stream",
       category: "Core Query",
       label: "Chunk stream emits finish",
+      status: "idle",
+      details: "Not run yet",
+    },
+    {
+      key: "concurrent",
+      category: "Core Query",
+      label: "Concurrent queries run in parallel",
+      status: "idle",
+      details: "Not run yet",
+    },
+    {
+      key: "frame-timing",
+      category: "Core Query",
+      label: "Per-frame timing available during stream",
       status: "idle",
       details: "Not run yet",
     },
@@ -169,7 +220,52 @@
   let connectionPassword = $state("root");
   let connectionStatus = $state("not connected");
   let connectionBusy = $state(false);
+
+  let concurrencyRuns = $state<ConcurrentRun[]>([]);
+  let concurrencyWallClockMs = $state(0);
+  let peakInFlight = $state(0);
+
+  const concurrencySummedMs = $derived(
+    concurrencyRuns.reduce((total, run) => total + run.durationMs, 0),
+  );
+  const concurrencyOverlapFactor = $derived(
+    concurrencyWallClockMs > 0 ? concurrencySummedMs / concurrencyWallClockMs : 0,
+  );
+
+  const CONCURRENCY_STAT_TIPS = {
+    wall:
+      "Elapsed time from dispatching the first concurrent query to the last one finishing. Lower is better when work runs in parallel.",
+    summed:
+      "Sum of each query's individual duration. Compare with wall clock to see how much work overlapped.",
+    overlap:
+      "Summed duration divided by wall clock. Values above 1.0 mean queries ran concurrently rather than one after another.",
+    peak:
+      "Maximum number of queries executing at the same time during the batch. The test launches 8 queries.",
+  } as const;
+
+  let frameTimingEntries = $state<FrameTimingEntry[]>([]);
+  let frameTimingSummary = $state("No frame timing data yet");
+  let frameTimingBusy = $state(false);
   let runRemoteHealthCheck = $state(false);
+
+  const statementFrameTimings = $derived(buildStatementFrameTimings(frameTimingEntries));
+  const frameTimingTotalServerMs = $derived(
+    statementFrameTimings.reduce((total, stmt) => total + (stmt.serverDurationMs ?? 0), 0),
+  );
+  const frameTimingTotalClientMs = $derived(
+    statementFrameTimings.reduce((total, stmt) => total + stmt.clientOverheadMs, 0),
+  );
+
+  const FRAME_TIMING_STAT_TIPS = {
+    server:
+      "Time reported by SurrealDB for executing the statement. This is usually the largest portion of each query.",
+    client:
+      "Transport and client-side time excluding server execution: gaps between streamed frames, decode, and done-frame overhead.",
+    span:
+      "Wall-clock span from the first frame arrival for this statement to the done frame.",
+    frames:
+      "Number of streamed frames received for the statement, including value and done frames.",
+  } as const;
 
   const DEFAULT_NAMESPACE = "starter";
   const DEFAULT_DATABASE = "mobile";
@@ -356,6 +452,143 @@
       return text;
     }
     return `${text.slice(0, 140)}...`;
+  }
+
+  function durationToMs(duration: unknown): number | null {
+    if (!duration || typeof duration !== "object") {
+      return null;
+    }
+
+    if ("nanoseconds" in duration) {
+      const nanos = (duration as { nanoseconds?: unknown }).nanoseconds;
+      if (typeof nanos === "bigint") {
+        return Number(nanos) / 1_000_000;
+      }
+      if (typeof nanos === "number") {
+        return nanos / 1_000_000;
+      }
+    }
+
+    if ("secs" in duration && "nanos" in duration) {
+      const secs = (duration as { secs?: unknown }).secs;
+      const nanos = (duration as { nanos?: unknown }).nanos;
+      if (typeof secs === "number" && typeof nanos === "number") {
+        return secs * 1000 + nanos / 1_000_000;
+      }
+    }
+
+    return null;
+  }
+
+  function concurrencyTimelineMs() {
+    if (concurrencyRuns.length === 0) {
+      return 1;
+    }
+
+    return Math.max(
+      1,
+      ...concurrencyRuns.map((run) => run.finishedAtMs),
+      concurrencyWallClockMs,
+    );
+  }
+
+  function buildStatementFrameTimings(entries: FrameTimingEntry[]): StatementFrameTiming[] {
+    if (entries.length === 0) {
+      return [];
+    }
+
+    const grouped = new Map<number, FrameTimingEntry[]>();
+
+    for (const entry of entries) {
+      const frames = grouped.get(entry.statement) ?? [];
+      frames.push(entry);
+      grouped.set(entry.statement, frames);
+    }
+
+    const statementIds = [...grouped.keys()].sort((a, b) => a - b);
+    let previousArrivalMs = 0;
+    const timings: StatementFrameTiming[] = [];
+
+    for (const statement of statementIds) {
+      const frames = (grouped.get(statement) ?? []).sort((a, b) => a.sequence - b.sequence);
+      const doneFrame = frames.find((frame) => frame.frameType === "done");
+      const serverDurationMs = doneFrame?.serverDurationMs ?? null;
+      const serverMs = serverDurationMs ?? 0;
+      const segments: StatementTimingSegment[] = [];
+      let clientOverheadMs = 0;
+
+      if (serverMs > 0) {
+        segments.push({
+          kind: "server",
+          ms: serverMs,
+          tip: `Server execution for query ${statement}: ${serverMs.toFixed(2)} ms reported in the done frame.`,
+        });
+      }
+
+      for (let index = 0; index < frames.length; index += 1) {
+        const frame = frames[index];
+        const previousMs =
+          index === 0 ? previousArrivalMs : (frames[index - 1]?.arrivedAtMs ?? previousArrivalMs);
+        const gapMs = Math.max(0, frame.arrivedAtMs - previousMs);
+
+        if (frame.frameType === "done") {
+          const doneClientMs = gapMs;
+          clientOverheadMs += doneClientMs;
+
+          if (doneClientMs > 0) {
+            segments.push({
+              kind: "client",
+              ms: doneClientMs,
+              sequence: frame.sequence,
+              frameType: frame.frameType,
+              tip:
+                `Done frame #${frame.sequence}: ${doneClientMs.toFixed(2)} ms client/transport time ` +
+                `after the last streamed frame.`,
+            });
+          }
+          continue;
+        }
+
+        if (index === 0) {
+          continue;
+        }
+
+        clientOverheadMs += gapMs;
+
+        if (gapMs > 0) {
+          segments.push({
+            kind: "client",
+            ms: gapMs,
+            sequence: frame.sequence,
+            frameType: frame.frameType,
+            tip:
+              `${frame.frameType} frame #${frame.sequence}: ${gapMs.toFixed(2)} ms since the previous frame ` +
+              `(transport/decode, excluding server execution). ${frame.summary}`,
+          });
+        }
+      }
+
+      const startedAtMs = frames[0]?.arrivedAtMs ?? 0;
+      const finishedAtMs = frames[frames.length - 1]?.arrivedAtMs ?? startedAtMs;
+      const totalMs = Math.max(1, segments.reduce((sum, segment) => sum + segment.ms, 0));
+
+      timings.push({
+        statement,
+        label: `Query ${statement}`,
+        frameCount: frames.length,
+        startedAtMs,
+        finishedAtMs,
+        spanMs: Math.max(0, finishedAtMs - startedAtMs),
+        serverDurationMs,
+        clientOverheadMs,
+        segments,
+        totalMs,
+      });
+
+      previousArrivalMs = finishedAtMs;
+    }
+
+    return timings;
   }
 
   function formatError(error: unknown) {
@@ -565,6 +798,183 @@
     }
 
     updateTest("stream", "pass", `Received ${frames.length} value frames and ${doneCount} done frames`);
+  }
+
+  async function runConcurrentQueryTest() {
+    updateTest("concurrent", "running", "Dispatching concurrent query workload...");
+
+    const client = await ensureReadySession();
+    const jobs = Array.from({ length: 8 }, (_, index) => `parallel_job_${index + 1}`);
+    const runs: ConcurrentRun[] = [];
+
+    let inFlight = 0;
+    let inFlightPeak = 0;
+    const wallStart = performance.now();
+
+    await Promise.all(
+      jobs.map(async (job) => {
+        const startedAt = performance.now();
+        inFlight += 1;
+        inFlightPeak = Math.max(inFlightPeak, inFlight);
+
+        try {
+          const [returnedJob, returnedLen] = await client
+            .query("RETURN $job; RETURN string::len($job);", { job })
+            .collect<[string, number]>();
+
+          assert(returnedJob === job, "concurrent query returned wrong job marker", {
+            returnedJob,
+            job,
+          });
+          assert(
+            Number(returnedLen) === job.length,
+            "concurrent query returned wrong marker length",
+            { returnedLen, job },
+          );
+        } finally {
+          const finishedAt = performance.now();
+          runs.push({
+            id: job,
+            startedAtMs: startedAt - wallStart,
+            finishedAtMs: finishedAt - wallStart,
+            durationMs: finishedAt - startedAt,
+          });
+          inFlight -= 1;
+        }
+      }),
+    );
+
+    const wallDurationMs = performance.now() - wallStart;
+    const summedDurationMs = runs.reduce((total, run) => total + run.durationMs, 0);
+    const overlapFactor = wallDurationMs > 0 ? summedDurationMs / wallDurationMs : 0;
+
+    runs.sort((a, b) => a.startedAtMs - b.startedAtMs);
+    concurrencyRuns = runs;
+    concurrencyWallClockMs = wallDurationMs;
+    peakInFlight = inFlightPeak;
+
+    updateTest(
+      "concurrent",
+      "pass",
+      `Peak in-flight=${inFlightPeak}, overlap=${overlapFactor.toFixed(2)}x`,
+    );
+  }
+
+  async function runFrameTimingTest() {
+    updateTest("frame-timing", "running", "Collecting stream frame timing...");
+
+    await captureFrameTimings();
+
+    const doneFrames = frameTimingEntries.filter((entry) => entry.frameType === "done");
+    assert(doneFrames.length >= 2, "expected at least two done frames", doneFrames);
+    assert(
+      doneFrames.every((frame) => frame.serverDurationMs !== null),
+      "done frames should expose server duration",
+      doneFrames,
+    );
+
+    updateTest(
+      "frame-timing",
+      "pass",
+      `Captured ${frameTimingEntries.length} frames with ${doneFrames.length} done frame durations`,
+    );
+  }
+
+  async function captureFrameTimings() {
+    if (frameTimingBusy) {
+      return;
+    }
+
+    frameTimingBusy = true;
+
+    try {
+      const client = await ensureReadySession();
+      await ensureLiveTable();
+
+      const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+      const rows = Array.from({ length: 1000 }, (_, index) => ({
+        run: suffix,
+        marker: `frame_row_${index}`,
+        idx: index,
+      }));
+
+      await client.insert(new Table("qa_mobile_demo"), rows).output("none");
+
+      const entries: FrameTimingEntry[] = [];
+      let sequence = 0;
+      const startedAt = performance.now();
+
+      try {
+        const stream = client
+          .query(
+            "SELECT id FROM qa_mobile_demo WHERE run = $run LIMIT 5; " +
+              "SELECT id FROM qa_mobile_demo WHERE run = $run;",
+            { run: suffix },
+          )
+          .stream();
+
+        for await (const frame of stream) {
+          const arrivalMs = performance.now() - startedAt;
+          const typedFrame = frame as Frame<unknown, false>;
+
+          if (typedFrame.isError()) {
+            entries.push({
+              sequence,
+              frameType: "error",
+              statement: typedFrame.query,
+              arrivedAtMs: arrivalMs,
+              serverDurationMs: durationToMs(typedFrame.stats?.duration),
+              summary: typedFrame.error.message,
+            });
+            typedFrame.throw();
+          }
+
+          if (typedFrame.isValue()) {
+            entries.push({
+              sequence,
+              frameType: "value",
+              statement: typedFrame.query,
+              arrivedAtMs: arrivalMs,
+              serverDurationMs: null,
+              summary: `value${typedFrame.isSingle ? " (single)" : ""}`,
+            });
+          }
+
+          if (typedFrame.isDone()) {
+            entries.push({
+              sequence,
+              frameType: "done",
+              statement: typedFrame.query,
+              arrivedAtMs: arrivalMs,
+              serverDurationMs: durationToMs(typedFrame.stats?.duration),
+              summary: `${typedFrame.type}`,
+            });
+          }
+
+          sequence += 1;
+        }
+      } finally {
+        await client.query("DELETE qa_mobile_demo WHERE run = $run;", { run: suffix }).collect();
+      }
+
+      frameTimingEntries = entries;
+
+      const doneFrames = entries.filter((entry) => entry.frameType === "done");
+      const timings = buildStatementFrameTimings(entries);
+      const doneSummary = timings
+        .map(
+          (stmt) =>
+            `q${stmt.statement}: server=${stmt.serverDurationMs?.toFixed(2) ?? "n/a"} ms, client=${stmt.clientOverheadMs.toFixed(2)} ms`,
+        )
+        .join("; ");
+
+      frameTimingSummary =
+        doneFrames.length > 0
+          ? `${timings.length} statement timelines captured. ${doneSummary}`
+          : "no done frames captured";
+    } finally {
+      frameTimingBusy = false;
+    }
   }
 
   async function runHealthTest() {
@@ -1024,6 +1434,8 @@
       { key: "init", run: runInitTest },
       { key: "query", run: runQueryTest },
       { key: "stream", run: runStreamTest },
+      { key: "concurrent", run: runConcurrentQueryTest },
+      { key: "frame-timing", run: runFrameTimingTest },
       { key: "health", run: runHealthTest },
       { key: "version", run: runVersionTest },
       { key: "session", run: runSessionTest },
@@ -1279,6 +1691,164 @@
     </article>
 
     <article class="glass card wide">
+      <h2>Concurrency + Frame Timing</h2>
+      <p class="meta">
+        Run parallel query batches and frame-stream timing probes to validate simultaneous execution
+        and per-statement done-frame durations.
+      </p>
+      <div class="actions">
+        <button type="button" class="primary" onclick={runConcurrentQueryTest}>
+          Run Concurrent Query Test
+        </button>
+        <button type="button" class="secondary" onclick={captureFrameTimings} disabled={frameTimingBusy}>
+          {frameTimingBusy ? "Capturing Frame Timings..." : "Capture Frame Timings"}
+        </button>
+      </div>
+
+      <h3>Concurrent Query Overlap</h3>
+      {#if concurrencyRuns.length === 0}
+        <p class="empty">No concurrent run data yet</p>
+      {:else}
+        <div class="stat-grid">
+          <div class="stat-chip" data-tip={CONCURRENCY_STAT_TIPS.wall} tabindex="0">
+            <span class="stat-label">Wall clock</span>
+            <span class="stat-value">{concurrencyWallClockMs.toFixed(2)} ms</span>
+          </div>
+          <div class="stat-chip" data-tip={CONCURRENCY_STAT_TIPS.summed} tabindex="0">
+            <span class="stat-label">Summed duration</span>
+            <span class="stat-value">{concurrencySummedMs.toFixed(2)} ms</span>
+          </div>
+          <div class="stat-chip" data-tip={CONCURRENCY_STAT_TIPS.overlap} tabindex="0">
+            <span class="stat-label">Overlap factor</span>
+            <span class="stat-value">{concurrencyOverlapFactor.toFixed(2)}x</span>
+          </div>
+          <div class="stat-chip" data-tip={CONCURRENCY_STAT_TIPS.peak} tabindex="0">
+            <span class="stat-label">Peak in-flight</span>
+            <span class="stat-value">{peakInFlight}</span>
+          </div>
+        </div>
+      {/if}
+      <div class="timeline-list">
+        {#if concurrencyRuns.length === 0}
+          <p class="empty">Run the concurrent query test to populate the timeline</p>
+        {:else}
+          {#each concurrencyRuns as run}
+            <div
+              class="timeline-row"
+              data-tip={`${run.id}: started +${run.startedAtMs.toFixed(2)} ms, finished +${run.finishedAtMs.toFixed(2)} ms, duration ${run.durationMs.toFixed(2)} ms`}
+              tabindex="0"
+            >
+              <span class="timeline-label">{run.id}</span>
+              <div class="timeline-track">
+                <span
+                  class="timeline-bar concurrent"
+                  style={`left:${(run.startedAtMs / concurrencyTimelineMs()) * 100}%;width:${Math.max(2, (run.durationMs / concurrencyTimelineMs()) * 100)}%;`}
+                ></span>
+              </div>
+              <span class="timeline-value">{run.durationMs.toFixed(2)} ms</span>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <h3>Stream Frame Timing</h3>
+      <p class="status-line">{frameTimingSummary}</p>
+      <div class="frame-timing-scroll">
+        {#if statementFrameTimings.length === 0}
+          <p class="empty">No frame timing data yet</p>
+        {:else}
+          <div class="stat-grid frame-timing-stats">
+            <div
+              class="stat-chip"
+              data-tip="Combined SurrealDB execution time across all streamed statements."
+              tabindex="0"
+            >
+              <span class="stat-label">Total server</span>
+              <span class="stat-value">{frameTimingTotalServerMs.toFixed(2)} ms</span>
+            </div>
+            <div
+              class="stat-chip"
+              data-tip="Combined client/transport time excluding reported server execution."
+              tabindex="0"
+            >
+              <span class="stat-label">Total client</span>
+              <span class="stat-value">{frameTimingTotalClientMs.toFixed(2)} ms</span>
+            </div>
+          </div>
+
+          <div class="statement-timing-list">
+            {#each statementFrameTimings as stmt (stmt.statement)}
+              <section class="statement-timing-card">
+                <div class="statement-timing-header">
+                  <div>
+                    <h4>{stmt.label}</h4>
+                    <p class="statement-meta">
+                      {stmt.frameCount} frames · span {stmt.spanMs.toFixed(2)} ms · total{" "}
+                      {stmt.totalMs.toFixed(2)} ms
+                    </p>
+                  </div>
+                  <div class="statement-stat-row">
+                    <div class="stat-chip compact" data-tip={FRAME_TIMING_STAT_TIPS.server} tabindex="0">
+                      <span class="stat-label">Server</span>
+                      <span class="stat-value">{stmt.serverDurationMs?.toFixed(2) ?? "n/a"} ms</span>
+                    </div>
+                    <div class="stat-chip compact" data-tip={FRAME_TIMING_STAT_TIPS.client} tabindex="0">
+                      <span class="stat-label">Client</span>
+                      <span class="stat-value">{stmt.clientOverheadMs.toFixed(2)} ms</span>
+                    </div>
+                    <div class="stat-chip compact" data-tip={FRAME_TIMING_STAT_TIPS.span} tabindex="0">
+                      <span class="stat-label">Span</span>
+                      <span class="stat-value">{stmt.spanMs.toFixed(2)} ms</span>
+                    </div>
+                    <div class="stat-chip compact" data-tip={FRAME_TIMING_STAT_TIPS.frames} tabindex="0">
+                      <span class="stat-label">Frames</span>
+                      <span class="stat-value">{stmt.frameCount}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  class="statement-track"
+                  data-tip={`Query ${stmt.statement} timeline: large block is server execution, trailing segments are per-frame client/transport time.`}
+                  tabindex="0"
+                >
+                  {#each stmt.segments as segment, index (index)}
+                    <span
+                      class={`statement-segment ${segment.kind}${segment.frameType ? ` ${segment.frameType}` : ""}`}
+                      style={`width:${Math.max(segment.kind === "server" ? 8 : 2, (segment.ms / stmt.totalMs) * 100)}%;`}
+                      data-tip={segment.tip}
+                      tabindex="0"
+                    >
+                      {#if segment.kind === "server"}
+                        <span class="segment-label">server {segment.ms.toFixed(1)} ms</span>
+                      {:else if segment.ms >= 4}
+                        <span class="segment-label">
+                          {segment.frameType ?? "client"} {segment.ms.toFixed(1)} ms
+                        </span>
+                      {/if}
+                    </span>
+                  {/each}
+                </div>
+
+                <div class="frame-client-list">
+                  {#each stmt.segments.filter((segment) => segment.kind === "client") as segment, index (index)}
+                    <span
+                      class="frame-client-chip"
+                      data-tip={segment.tip}
+                      tabindex="0"
+                    >
+                      #{segment.sequence ?? "?"} {segment.frameType}: {segment.ms.toFixed(2)} ms client
+                    </span>
+                  {/each}
+                </div>
+              </section>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </article>
+
+    <article class="glass card wide">
       <h2>Manual Record Mutations</h2>
       <p class="meta">Use this panel to create, update, or delete a record while watching the Live Feed.</p>
       <div class="actions">
@@ -1309,6 +1879,9 @@
         </label>
       </div>
       <div class="actions">
+        <button type="button" class="secondary" onclick={runManualQuery}>
+          Run Manual Query
+        </button>
         <button type="button" class="primary" onclick={() => runManualMutation("create")}>
           Create Record
         </button>
@@ -1317,9 +1890,6 @@
         </button>
         <button type="button" class="danger" onclick={() => runManualMutation("delete")}>
           Delete Record
-        </button>
-        <button type="button" class="secondary" onclick={runManualQuery}>
-          Run Manual Query
         </button>
       </div>
       <p class="status-line">Manual status: {manualStatus}</p>
@@ -1564,6 +2134,233 @@
     margin: 0.2rem 0;
   }
 
+  .timeline-list {
+    margin-top: 0.5rem;
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .frame-timing-scroll {
+    margin-top: 0.5rem;
+    max-height: 420px;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .frame-timing-stats {
+    margin-bottom: 0.75rem;
+  }
+
+  .statement-timing-list {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .statement-timing-card {
+    border: 1px solid rgba(51, 66, 95, 0.16);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.75rem;
+  }
+
+  .statement-timing-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 0.65rem;
+  }
+
+  .statement-timing-header h4 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .statement-meta {
+    margin: 0.2rem 0 0;
+    font-size: 0.78rem;
+    color: #5a6f93;
+  }
+
+  .statement-stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: flex-end;
+  }
+
+  .stat-chip.compact {
+    min-width: 88px;
+    padding: 0.45rem 0.55rem;
+  }
+
+  .statement-track {
+    display: flex;
+    width: 100%;
+    min-height: 34px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(51, 66, 95, 0.1);
+    cursor: help;
+  }
+
+  .statement-segment {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2px;
+    height: 100%;
+    overflow: hidden;
+    cursor: help;
+  }
+
+  .statement-segment.server {
+    background: linear-gradient(90deg, #0e9f6e, #1fbf84);
+  }
+
+  .statement-segment.client {
+    background: linear-gradient(90deg, #7b61ff, #9b59b6);
+  }
+
+  .statement-segment.client.done {
+    background: linear-gradient(90deg, #1f5cff, #2789ff);
+  }
+
+  .segment-label {
+    padding: 0 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  .frame-client-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.55rem;
+  }
+
+  .frame-client-chip {
+    position: relative;
+    padding: 0.28rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(123, 97, 255, 0.12);
+    color: #4f3d99;
+    font-size: 0.72rem;
+    cursor: help;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.55rem;
+    margin-top: 0.5rem;
+  }
+
+  .stat-chip {
+    position: relative;
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 12px;
+    border: 1px solid rgba(51, 66, 95, 0.18);
+    background: rgba(255, 255, 255, 0.82);
+    cursor: help;
+  }
+
+  .stat-label {
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #5a6f93;
+  }
+
+  .stat-value {
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: #0f1626;
+  }
+
+  [data-tip] {
+    position: relative;
+  }
+
+  [data-tip]:hover::after,
+  [data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.55rem);
+    transform: translateX(-50%);
+    z-index: 30;
+    width: max-content;
+    max-width: min(280px, 80vw);
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
+    background: rgba(15, 22, 38, 0.96);
+    color: #f4f7ff;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 10px 24px rgba(15, 22, 38, 0.28);
+  }
+
+  .timeline-row[data-tip]:hover::after,
+  .timeline-row[data-tip]:focus-visible::after {
+    left: 0;
+    transform: none;
+    max-width: min(360px, 90vw);
+  }
+
+  .timeline-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 210px) 1fr minmax(160px, 220px);
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  .timeline-label,
+  .timeline-value {
+    font-size: 0.82rem;
+    color: #2b3b59;
+  }
+
+  .timeline-track {
+    position: relative;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(51, 66, 95, 0.14);
+    overflow: hidden;
+  }
+
+  .timeline-bar {
+    position: absolute;
+    top: 1px;
+    height: 10px;
+    border-radius: 999px;
+  }
+
+  .timeline-bar.concurrent {
+    background: linear-gradient(90deg, #1f5cff, #2789ff);
+  }
+
+  .timeline-bar.value {
+    background: #9b59b6;
+  }
+
+  .timeline-bar.done {
+    background: #0e9f6e;
+  }
+
+  .timeline-bar.error {
+    background: #d64040;
+  }
+
   @media (prefers-color-scheme: dark) {
     :global(html) {
       background:
@@ -1608,6 +2405,53 @@
       color: #bdcbea;
     }
 
+    .timeline-label,
+    .timeline-value {
+      color: #bdcbea;
+    }
+
+    .stat-chip {
+      border-color: rgba(181, 199, 230, 0.2);
+      background: rgba(17, 23, 40, 0.82);
+    }
+
+    .stat-label {
+      color: #9cb0d8;
+    }
+
+    .stat-value {
+      color: #e8edf8;
+    }
+
+    .statement-timing-card {
+      border-color: rgba(181, 199, 230, 0.18);
+      background: rgba(17, 23, 40, 0.72);
+    }
+
+    .statement-meta {
+      color: #9cb0d8;
+    }
+
+    .statement-track {
+      background: rgba(181, 199, 230, 0.16);
+    }
+
+    .frame-client-chip {
+      background: rgba(123, 97, 255, 0.18);
+      color: #d6cbff;
+    }
+
+    [data-tip]:hover::after,
+    [data-tip]:focus-visible::after {
+      background: rgba(8, 12, 22, 0.98);
+      color: #eef3ff;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .timeline-track {
+      background: rgba(181, 199, 230, 0.22);
+    }
+
     input {
       border-color: rgba(181, 199, 230, 0.25);
       background: rgba(15, 22, 38, 0.92);
@@ -1646,6 +2490,19 @@
 
     .manual-grid {
       grid-template-columns: 1fr;
+    }
+
+    .timeline-row {
+      grid-template-columns: 1fr;
+      gap: 0.3rem;
+    }
+
+    .statement-timing-header {
+      flex-direction: column;
+    }
+
+    .statement-stat-row {
+      justify-content: flex-start;
     }
   }
 
