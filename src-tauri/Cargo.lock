@@ -1310,14 +1310,14 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "diskann"
-version = "0.52.0"
+version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f755600588b562720091e462e48440ea32bfe519465470765533bc86c05f39"
+checksum = "376186e025eb294c22f06236b23417608f1867def159c3a61a5c57788a3e889e"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1335,9 +1335,9 @@ dependencies = [
 
 [[package]]
 name = "diskann-utils"
-version = "0.52.0"
+version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ee26b0559c0b249fb5e26859c7b5607886c2bd0055def1b102e8b912830fba8"
+checksum = "7b70289db1b66826fa1ef2b4113bf2f9d0dedc8df983b2b804c38dc1e519e15e"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -1352,9 +1352,9 @@ dependencies = [
 
 [[package]]
 name = "diskann-vector"
-version = "0.52.0"
+version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f029366de6314c9e8a294012b0d8f53986c7c8a63a9e09fc18ca39a42ac38a6f"
+checksum = "f62c9d81aad6e3df6a026b1bb693dbbcfbee5ea93d9e7a5ff15c31576263bc29"
 dependencies = [
  "cfg-if",
  "diskann-wide",
@@ -1363,9 +1363,9 @@ dependencies = [
 
 [[package]]
 name = "diskann-wide"
-version = "0.52.0"
+version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ae2fe23f8f0fecc81b561a4ff06f7da6fc0e5da355d41b8abcd440ed6f41a0f"
+checksum = "46fcacef8ea9274969f98499456718f3dcaa5d3d7392b3171079653370fa0b20"
 dependencies = [
  "cfg-if",
  "half",
@@ -1630,7 +1630,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4439,7 +4439,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -5058,7 +5058,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5191,7 +5191,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5523,7 +5523,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5715,9 +5715,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb"
-version = "3.1.2"
+version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290298f4df7c85ed50881d15ce4a49ec0d3d030e0e9e5215c0b5344afe5ef380"
+checksum = "81ee3110fe3ab8172eb8c135c96ed2d57c7470cdf1ad732d176db95a92c9faab"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5750,9 +5750,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-collections"
-version = "3.1.2"
+version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "498acc47f0dbdd467431834726242cbc8802fb75d53b1a3f7fd703b752da2662"
+checksum = "069e0c90dad71cf8f17475f75118a56ad3047f2f46fac24643e562b415b3f11a"
 dependencies = [
  "revision",
  "storekey",
@@ -5760,9 +5760,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-core"
-version = "3.1.2"
+version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc74bf4defa63b4b3cc9f95b4a3e716aa5b4cfc7e13871a7e7da9f634a1273db"
+checksum = "9780c2f3dd6a3cb1cce8ca7c866b5e82ac4377b826a09bf718ca441bfd2bd747"
 dependencies = [
  "addr",
  "affinitypool",
@@ -5881,9 +5881,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-strand"
-version = "3.1.2"
+version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3b1e7d31ee0eb56e63df9b518150f35c0d03ab1938372e6ad6ba4e30e24b4c"
+checksum = "4af300a172983b23c05e692cacba462ca023e3e9404812b6783d09a8af487865"
 dependencies = [
  "revision",
  "serde",
@@ -5892,9 +5892,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-types"
-version = "3.1.2"
+version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b24fe0d9852fdd25f4746be5ea3570f2b56273cfa4e3303fb77fa770a3e33a8"
+checksum = "edd434d643c040c2872c9cfc88c90e9910e9a55456d2df7e68e92725225d3e20"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5922,9 +5922,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-types-derive"
-version = "3.1.2"
+version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19d50454f56d5e0d633541054feffd0b1c907079585e7286cdc6e6c5d13ce4c9"
+checksum = "16d385184f3b727c58c4d099a877a4c54ffe879dd190396cc80b1676146b8b2b"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
@@ -6377,7 +6377,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6910,7 +6910,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7409,7 +7409,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
