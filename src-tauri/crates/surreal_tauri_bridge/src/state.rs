@@ -275,6 +275,10 @@ impl RpcProtocol for RpcConnection {
         &self.datastore
     }
 
+    fn kvs_arc(&self) -> Arc<Datastore> {
+        self.datastore.clone()
+    }
+
     fn version_data(&self) -> DbResult {
         DbResult::Other(Value::String("surrealdb-3.1.2".to_string()))
     }
